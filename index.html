@@ -135,12 +135,65 @@ select.finp { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg 
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
 
 /* ── BOTTOM NAV ── */
-.bnav { flex-shrink: 0; background: var(--W); border-top: 1px solid var(--BD); padding: 5px 0 env(safe-area-inset-bottom, 8px); display: flex; justify-content: space-around; }
-.ni { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; padding: 5px 8px; border-radius: 9px; transition: all .18s; flex: 1; min-width: 0; }
-.ni .ico { font-size: 22px; color: var(--T3); }
-.ni .nlbl { font-size: 10px; color: var(--T3); font-weight: 600; white-space: nowrap; }
-.ni.on { background: var(--NL); }
-.ni.on .ico, .ni.on .nlbl { color: var(--N); }
+.bnav {
+  flex-shrink: 0;
+  background: var(--W);
+  border-top: 2px solid var(--BD);
+  padding: 8px 4px env(safe-area-inset-bottom, 10px);
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  gap: 2px;
+}
+.ni {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 10px 6px 8px;
+  border-radius: 14px;
+  transition: all .2s;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.ni:active { transform: scale(0.92); }
+.ni .ico {
+  font-size: 28px;
+  color: var(--T3);
+  line-height: 1;
+  transition: color .2s, transform .2s;
+}
+.ni .nlbl {
+  font-size: 11px;
+  color: var(--T3);
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  transition: color .2s;
+}
+.ni.on {
+  background: var(--NL);
+}
+.ni.on .ico {
+  color: var(--N);
+  transform: translateY(-2px);
+}
+.ni.on .nlbl {
+  color: var(--N);
+}
+.ni.on::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 3px;
+  background: var(--N);
+  border-radius: 3px 3px 0 0;
+}
 
 /* ── PAGE CONTENT ── */
 .pcontent { flex: 1; overflow-y: auto; background: var(--BG); -webkit-overflow-scrolling: touch; }
@@ -891,11 +944,26 @@ select.finp { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg 
 
   <!-- Bottom Navigation -->
   <nav class="bnav">
-    <div class="ni on" onclick="goPage('home')" id="nav-home"><i class="ti ti-home ico"></i><span class="nlbl">Home</span></div>
-    <div class="ni" onclick="goPage('inventory')" id="nav-inventory"><i class="ti ti-box ico"></i><span class="nlbl">Stock</span></div>
-    <div class="ni" onclick="goPage('employees')" id="nav-employees"><i class="ti ti-users ico"></i><span class="nlbl">Staff</span></div>
-    <div class="ni" onclick="goPage('payroll')" id="nav-payroll"><i class="ti ti-receipt-rupee ico"></i><span class="nlbl">Payroll</span></div>
-    <div class="ni" onclick="goPage('reports')" id="nav-reports"><i class="ti ti-file-analytics ico"></i><span class="nlbl">Reports</span></div>
+    <div class="ni on" onclick="goPage('home')" id="nav-home">
+      <i class="ti ti-home-2 ico" aria-hidden="true"></i>
+      <span class="nlbl">Home</span>
+    </div>
+    <div class="ni" onclick="goPage('inventory')" id="nav-inventory">
+      <i class="ti ti-package ico" aria-hidden="true"></i>
+      <span class="nlbl">Stock</span>
+    </div>
+    <div class="ni" onclick="goPage('employees')" id="nav-employees">
+      <i class="ti ti-users ico" aria-hidden="true"></i>
+      <span class="nlbl">Staff</span>
+    </div>
+    <div class="ni" onclick="goPage('payroll')" id="nav-payroll">
+      <i class="ti ti-currency-rupee ico" aria-hidden="true"></i>
+      <span class="nlbl">Payroll</span>
+    </div>
+    <div class="ni" onclick="goPage('reports')" id="nav-reports">
+      <i class="ti ti-chart-bar ico" aria-hidden="true"></i>
+      <span class="nlbl">Reports</span>
+    </div>
   </nav>
 </div><!-- /scr-main -->
 
