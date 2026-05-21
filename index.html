@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0D2B6B">
+<meta name="description" content="TFO One - Textile Factory ERP for Tamil Nadu">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TFO One">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600&display=swap" rel="stylesheet">
+<title>TFO One</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="APP">
+
+<!-- ═══════════════ AUTH SCREEN ═══════════════ -->
+<div class="scr on" id="scr-auth">
+  <div class="auth-top">
+    <div class="auth-logo-row">
+      <div class="auth-logo-box">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1.5" fill="#1A4FD6"/><rect x="11" y="2" width="7" height="7" rx="1.5" fill="#1A4FD6" opacity=".45"/><rect x="2" y="11" width="7" height="7" rx="1.5" fill="#1A4FD6" opacity=".45"/><rect x="11" y="11" width="7" height="7" rx="1.5" fill="#1A4FD6"/></svg>
+      </div>
+      <span class="auth-logo-name">TFO One</span>
+    </div>
+    <div class="auth-hero-title">Manage your factory<br>from your phone</div>
+    <div class="auth-hero-sub">Inventory · Payroll · Attendance<br>Built for Tamil Nadu TFO owners</div>
+  </div>
+  <div class="auth-body">
+
+    <!-- Step 1: Mobile Number -->
+    <div class="auth-step on" id="st-phone">
+      <p class="step-title">Enter your mobile number</p>
+      <p class="step-sub">We'll send a 6-digit OTP to verify</p>
+      <div class="fgrp">
+        <label class="flbl"><i class="ti ti-device-mobile"></i> Mobile Number</label>
+        <div class="phone-row">
+          <div class="cc-box">+91</div>
+          <input type="tel" class="finp" id="ph-inp" placeholder="98765 43210" maxlength="10" inputmode="numeric" oninput="chkPh()">
+        </div>
+      </div>
+      <label class="terms-label">
+        <input type="checkbox" id="terms" onchange="chkPh()">
+        <span>I agree to <span class="link-text">Terms</span> &amp; <span class="link-text">Privacy Policy</span></span>
+      </label>
+      <button class="bpri" id="send-otp-btn" disabled onclick="doSendOTP()">
+        <i class="ti ti-send"></i> Send OTP
+      </button>
+      <div class="auth-divider"><hr><span>or</span><hr></div>
+      <button class="bsec" onclick="showStep('st-login')">
+        <i class="ti ti-lock"></i> Login with Password
+      </button>
+      <div class="auth-switch">New user? <span class="link-text" onclick="showStep('st-reg')">Create account</span></div>
+    </div>
+
+    <!-- Step 2: OTP Verify -->
+    <div class="auth-step" id="st-otp">
+      <div class="back-row">
+        <button class="icon-btn ib-back" onclick="showStep('st-phone')"><i class="ti ti-arrow-left"></i></button>
+        <p class="step-title" style="margin:0">Verify OTP</p>
+      </div>
+      <p class="step-sub">Sent to +91 <span id="ph-disp" style="font-weight:700;color:var(--T)">98765 43210</span></p>
+      <div class="otp-grid">
+        <input class="obox" type="text" id="o1" maxlength="1" inputmode="numeric" oninput="oNext(this,'o2')" onkeydown="oKey(event,this,'')">
+        <input class="obox" type="text" id="o2" maxlength="1" inputmode="numeric" oninput="oNext(this,'o3')" onkeydown="oKey(event,this,'o1')">
+        <input class="obox" type="text" id="o3" maxlength="1" inputmode="numeric" oninput="oNext(this,'o4')" onkeydown="oKey(event,this,'o2')">
+        <input class="obox" type="text" id="o4" maxlength="1" inputmode="numeric" oninput="oNext(this,'o5')" onkeydown="oKey(event,this,'o3')">
+        <input class="obox" type="text" id="o5" maxlength="1" inputmode="numeric" oninput="oNext(this,'o6')" onkeydown="oKey(event,this,'o4')">
+        <input class="obox" type="text" id="o6" maxlength="1" inputmode="numeric" oninput="oTryV()" onkeydown="oKey(event,this,'o5')">
+      </div>
+      <button class="bpri" onclick="doVerify()"><i class="ti ti-shield-check"></i> Verify &amp; Login</button>
+      <div class="otp-info" id="otp-timer-wrap">Resend in <span id="otp-cd">30s</span></div>
+      <div class="otp-demo-hint">Demo: type <strong>123456</strong></div>
+    </div>
+
+    <!-- Step 3: Password Login -->
+    <div class="auth-step" id="st-login">
+      <div class="back-row">
+        <button class="icon-btn ib-back" onclick="showStep('st-phone')"><i class="ti ti-arrow-left"></i></button>
+        <p class="step-title" style="margin:0">Login with Password</p>
+      </div>
+      <div class="fgrp">
+        <label class="flbl"><i class="ti ti-device-mobile"></i> Mobile Number</label>
+        <input type="tel" class="finp" placeholder="98765 43210" inputmode="numeric">
+      </div>
+      <div class="fgrp">
+        <label class="flbl"><i class="ti ti-lock"></i> Password</label>
+        <input type="password" class="finp" placeholder="Enter password">
+      </div>
+      <div class="forgot-row"><span class="link-text">Forgot password?</span></div>
+      <button class="bpri" onclick="enterApp()"><i class="ti ti-login"></i> Login</button>
+      <div class="auth-switch">New user? <span class="link-text" onclick="showStep('st-reg')">Create account</span></div>
+    </div>
+
+    <!-- Step 4: Register -->
+    <div class="auth-step" id="st-reg">
+      <div class="back-row">
+        <button class="icon-btn ib-back" onclick="showStep('st-phone')"><i class="ti ti-arrow-left"></i></button>
+        <p class="step-title" style="margin:0">Create Account</p>
+      </div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-user"></i> Owner Name</label><input type="text" class="finp" placeholder="Your full name"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-building-factory-2"></i> Factory / TFO Name</label><input type="text" class="finp" placeholder="Guna's TFO"></div>
+      <div class="fgrp">
+        <label class="flbl"><i class="ti ti-device-mobile"></i> Mobile Number</label>
+        <div class="phone-row"><div class="cc-box">+91</div><input type="tel" class="finp" placeholder="98765 43210" inputmode="numeric"></div>
+      </div>
+      <div class="frow">
+        <div class="fgrp"><label class="flbl"><i class="ti ti-lock"></i> Password</label><input type="password" class="finp" placeholder="Min 8 chars"></div>
+        <div class="fgrp"><label class="flbl"><i class="ti ti-lock-check"></i> Confirm</label><input type="password" class="finp" placeholder="Repeat"></div>
+      </div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-mail"></i> Email (optional)</label><input type="email" class="finp" placeholder="you@email.com"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-brand-whatsapp"></i> WhatsApp Number</label><input type="tel" class="finp" placeholder="Same or different" inputmode="numeric"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-map-pin"></i> Factory Address</label><input type="text" class="finp" placeholder="Full address"></div>
+      <button class="bpri" onclick="showStep('st-phone')"><i class="ti ti-send"></i> Create &amp; Get OTP</button>
+      <div class="auth-switch"><span class="link-text" onclick="showStep('st-phone')">Already registered? Login</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MAIN APP ═══════════════ -->
+<div class="scr" id="scr-main">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="tbrand">
+      <div class="tb-left">
+        <div class="tb-logo">
+          <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1.5" fill="#1A4FD6"/><rect x="11" y="2" width="7" height="7" rx="1.5" fill="#1A4FD6" opacity=".45"/><rect x="2" y="11" width="7" height="7" rx="1.5" fill="#1A4FD6" opacity=".45"/><rect x="11" y="11" width="7" height="7" rx="1.5" fill="#1A4FD6"/></svg>
+        </div>
+        <span class="tb-name">TFO One</span>
+      </div>
+      <div class="tb-right">
+        <div class="ltog">
+          <button class="lbtn on" id="lb-en" onclick="setLang('en')">EN</button>
+          <button class="lbtn" id="lb-ta" onclick="setLang('ta')" style="font-family:'Noto Sans Tamil',sans-serif">த</button>
+        </div>
+        <div class="tb-icon-btn" title="Notifications" aria-label="Notifications">
+          <i class="ti ti-bell" style="font-size:15px;color:rgba(255,255,255,.9)"></i>
+          <div class="ndot"></div>
+        </div>
+        <div class="tb-icon-btn" onclick="goPage('profile')" title="My Profile" aria-label="My Profile">
+          <i class="ti ti-user-circle" style="font-size:16px;color:rgba(255,255,255,.9)"></i>
+        </div>
+      </div>
+    </div>
+    <div class="facbar">
+      <div>
+        <div class="fac-greet" id="fac-greet">Welcome,</div>
+        <div class="fac-name" id="fac-name">Guna's TFO</div>
+      </div>
+      <div class="fsync"><div class="sdot"></div><span id="sync-lbl">Synced</span></div>
+    </div>
+  </div>
+
+  <!-- Page Content Area -->
+  <div class="pcontent" id="pcontent">
+
+    <!-- ─── HOME ─── -->
+    <div class="page on" id="pg-home">
+      <div class="page-intro">
+        <div>
+          <div class="ptitle">Today's Overview</div>
+          <div class="psub" id="today-date">Thursday, 21 May 2026</div>
+        </div>
+        <div class="badge bb">Week 21</div>
+      </div>
+      <div class="sgrid">
+        <div class="sc pri">
+          <div class="slbl">Total Stock</div>
+          <div><span class="sval">4,820</span><span class="sunit">KG</span></div>
+          <div class="schg" style="color:rgba(255,255,255,.65)">↑ 77 bags</div>
+        </div>
+        <div class="sc">
+          <div class="slbl">Employees</div>
+          <div><span class="sval">24</span></div>
+          <div style="margin-top:4px"><span class="badge bg" style="font-size:10px">20 active</span></div>
+        </div>
+        <div class="sc">
+          <div class="slbl">Weekly Pay</div>
+          <div><span class="sval">₹52,400</span></div>
+          <div class="schg up">↑ This week</div>
+        </div>
+        <div class="sc">
+          <div class="slbl">Production</div>
+          <div><span class="sval">380</span><span class="sunit">KG</span></div>
+          <div class="schg up">↑ Today</div>
+        </div>
+      </div>
+
+      <div class="slabel"><i class="ti ti-bolt"></i> Quick Actions</div>
+      <div class="qgrid">
+        <div class="qbtn" onclick="openSheet('sh-inward')">
+          <div class="cico ci-b"><i class="ti ti-package"></i></div>
+          <div class="qlbl">Yarn Inward</div>
+          <div class="qsub">Add stock entry</div>
+        </div>
+        <div class="qbtn" onclick="openSheet('sh-outward')">
+          <div class="cico ci-a"><i class="ti ti-truck-delivery"></i></div>
+          <div class="qlbl">Yarn Outward</div>
+          <div class="qsub">Issue yarn to party</div>
+        </div>
+        <div class="qbtn" onclick="openSheet('sh-att')">
+          <div class="cico ci-g"><i class="ti ti-clipboard-list"></i></div>
+          <div class="qlbl">Attendance</div>
+          <div class="qsub">Mark today's staff</div>
+        </div>
+        <div class="qbtn" onclick="goPage('payroll')">
+          <div class="cico ci-n"><i class="ti ti-receipt-rupee"></i></div>
+          <div class="qlbl">Payroll</div>
+          <div class="qsub">Calculate salaries</div>
+        </div>
+      </div>
+
+      <div class="slabel"><i class="ti ti-chart-bar"></i> Weekly Production</div>
+      <div class="card" style="padding-bottom:22px">
+        <div class="chwrap" id="home-chart"></div>
+        <div style="height:14px"></div>
+        <div class="chart-footer">
+          <span class="chart-footer-lbl">Total this week</span>
+          <span class="chart-footer-val">2,340 KG</span>
+        </div>
+      </div>
+
+      <div class="slabel"><i class="ti ti-activity"></i> Recent Activity</div>
+      <div class="lwrap">
+        <div class="li">
+          <div class="lav ci-b cico"><i class="ti ti-package" style="font-size:16px"></i></div>
+          <div class="linf"><div class="lname">Yarn Inward</div><div class="ldet">Blue 40s · 12 bags · 745.5 KG</div></div>
+          <div class="lrt"><div class="badge bb">+745 KG</div><div class="ltm">9:30 AM</div></div>
+        </div>
+        <div class="li">
+          <div class="lav ci-a cico"><i class="ti ti-truck-delivery" style="font-size:16px"></i></div>
+          <div class="linf"><div class="lname">Yarn Outward</div><div class="ldet">White 30s · 5 bags · 311.25 KG</div></div>
+          <div class="lrt"><div class="badge ba">−311 KG</div><div class="ltm">8:15 AM</div></div>
+        </div>
+        <div class="li">
+          <div class="lav ci-g cico"><i class="ti ti-user-check" style="font-size:16px"></i></div>
+          <div class="linf"><div class="lname">Attendance Marked</div><div class="ldet">Morning Shift · 18/20 present</div></div>
+          <div class="lrt"><div class="badge bg">18 P</div><div class="ltm">7:00 AM</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── INVENTORY ─── -->
+    <div class="page" id="pg-inventory">
+      <div class="phdr">
+        <div><div class="ptitle">Inventory</div><div class="psub">Yarn stock overview</div></div>
+        <button class="hbtn" onclick="openSheet('sh-inward')"><i class="ti ti-plus"></i> Add</button>
+      </div>
+      <div class="sgrid">
+        <div class="sc pri"><div class="slbl">Total KG</div><div><span class="sval">4,820</span><span class="sunit">KG</span></div></div>
+        <div class="sc"><div class="slbl">Total Bags</div><div><span class="sval">77</span><span class="sunit">bags</span></div></div>
+      </div>
+      <div class="tabbar">
+        <button class="tab on" onclick="invTab(this,'it-stock')">Stock</button>
+        <button class="tab" onclick="invTab(this,'it-inward')">Inward</button>
+        <button class="tab" onclick="invTab(this,'it-outward')">Outward</button>
+      </div>
+      <div id="it-stock">
+        <div class="slabel"><i class="ti ti-palette"></i> Color-wise Stock</div>
+        <div class="card" style="padding:0 13px" id="stock-list"></div>
+      </div>
+      <div id="it-inward" style="display:none">
+        <div class="card">
+          <div class="inv-card-row"><div><div class="ctitle"><i class="ti ti-building" style="font-size:13px;color:var(--T2);margin-right:5px"></i>Rajan Textiles</div><div class="csub"><i class="ti ti-palette" style="font-size:11px;margin-right:3px"></i>Blue 40s · 12 bags · 62.125 KG/bag</div></div><div class="badge bb">+745.5 KG</div></div>
+          <div class="inv-meta"><span><i class="ti ti-calendar" style="font-size:11px;margin-right:3px"></i>20 May 2026</span><span>IW-0045</span></div>
+        </div>
+        <div class="card">
+          <div class="inv-card-row"><div><div class="ctitle"><i class="ti ti-building" style="font-size:13px;color:var(--T2);margin-right:5px"></i>Kumar Yarn Co.</div><div class="csub"><i class="ti ti-palette" style="font-size:11px;margin-right:3px"></i>White 30s · 5 bags · 62.250 KG/bag</div></div><div class="badge bb">+311.25 KG</div></div>
+          <div class="inv-meta"><span><i class="ti ti-calendar" style="font-size:11px;margin-right:3px"></i>19 May 2026</span><span>IW-0044</span></div>
+        </div>
+      </div>
+      <div id="it-outward" style="display:none">
+        <div class="card">
+          <div class="inv-card-row"><div><div class="ctitle"><i class="ti ti-building-store" style="font-size:13px;color:var(--T2);margin-right:5px"></i>ABC Weaving Mills</div><div class="csub"><i class="ti ti-palette" style="font-size:11px;margin-right:3px"></i>White 30s · 5 bags</div></div><div class="badge ba">−311.25 KG</div></div>
+          <div class="inv-meta"><span><i class="ti ti-calendar" style="font-size:11px;margin-right:3px"></i>21 May 2026</span><span>OW-0022</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── STAFF ─── -->
+    <div class="page" id="pg-employees">
+      <div class="phdr">
+        <div><div class="ptitle">Staff</div><div class="psub" id="staff-sub">24 employees · 20 active today</div></div>
+        <button class="hbtn" onclick="openSheet('sh-addEmp')"><i class="ti ti-user-plus"></i> Add</button>
+      </div>
+      <div class="tabbar">
+        <button class="tab on" onclick="empTab(this,'et-all')">All</button>
+        <button class="tab" onclick="empTab(this,'et-mor')">Morning</button>
+        <button class="tab" onclick="empTab(this,'et-nig')">Night</button>
+      </div>
+      <div id="et-all"><div class="lwrap" id="el-all"></div></div>
+      <div id="et-mor" style="display:none"><div class="lwrap" id="el-mor"></div></div>
+      <div id="et-nig" style="display:none"><div class="lwrap" id="el-nig"></div></div>
+    </div>
+
+    <!-- ─── EMPLOYEE PROFILE ─── -->
+    <div class="page" id="pg-empprofile" style="padding:0">
+      <div class="ep-flex" id="ep-flex">
+        <div class="ep-hdr" id="ep-hdr">
+          <button class="ep-back-btn" onclick="goPage('employees')"><i class="ti ti-arrow-left" style="font-size:17px"></i></button>
+          <div class="ep-top-acts">
+            <button class="icon-btn ib-edit" onclick="openSheet('sh-addEmp')" title="Edit"><i class="ti ti-pencil"></i></button>
+            <button class="icon-btn ib-del" onclick="openConfirmDel()" title="Remove employee"><i class="ti ti-trash"></i></button>
+          </div>
+          <div class="ep-photo" id="ep-photo">MK</div>
+          <div class="ep-name" id="ep-name">Murugan K.</div>
+          <div class="ep-role" id="ep-role">Machine Operator · E001</div>
+          <div class="ep-badges">
+            <div class="epb epb-s" id="ep-shift">Morning Shift</div>
+            <div class="epb epb-b" id="ep-blood">B+</div>
+            <div class="epb epb-p" id="ep-status">Present Today</div>
+          </div>
+        </div>
+        <div class="pbody">
+          <div class="psec">
+            <div class="pshdr"><i class="ti ti-user-circle" style="font-size:15px;color:var(--B)"></i><span class="pstitle">Personal Details</span></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-device-mobile"></i> Mobile</div><div class="pfval" id="ep-mobile">+91 98765 43210</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-id"></i> Aadhaar</div><div class="pfval" id="ep-aadh">XXXX XXXX 4321</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-droplet" style="color:var(--R)"></i> Blood Group</div><div class="pfval" id="ep-bloodval" style="color:var(--R);font-weight:700">B+</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-map-pin"></i> Address</div><div class="pfval" id="ep-addr">42, Gandhi Nagar, Erode</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-calendar-event"></i> Joined</div><div class="pfval" id="ep-join">01 Jan 2024</div></div>
+          </div>
+          <div class="psec">
+            <div class="pshdr"><i class="ti ti-currency-rupee" style="font-size:15px;color:var(--G)"></i><span class="pstitle">Salary Info</span></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-tag"></i> Pay Type</div><div class="pfval" id="ep-saltype">Bag Production</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-coins"></i> Rate</div><div class="pfval" id="ep-salrate" style="color:var(--G)">₹28/bag</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-alert-circle" style="color:var(--A)"></i> Advance</div><div class="pfval" id="ep-adv">₹1,500</div></div>
+          </div>
+          <div class="psec">
+            <div class="pshdr" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:7px"><i class="ti ti-calendar-stats" style="font-size:15px;color:var(--A)"></i><span class="pstitle">This Week Attendance</span></div>
+              <button class="hbtn" style="padding:5px 10px;font-size:12px" onclick="openSheet('sh-att')"><i class="ti ti-pencil"></i> Edit</button>
+            </div>
+            <div class="attweek" id="ep-att"></div>
+          </div>
+          <div class="psec">
+            <div class="pshdr"><i class="ti ti-users" style="font-size:15px;color:var(--T2)"></i><span class="pstitle">Family Info</span></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-user"></i> Father</div><div class="pfval" id="ep-father">Krishnan K.</div></div>
+            <div class="pf"><div class="pflbl"><i class="ti ti-user"></i> Mother</div><div class="pfval" id="ep-mother">Meena K.</div></div>
+          </div>
+          <div class="ep-action-row">
+            <button class="ep-act-primary" onclick="openSheet('sh-att')"><i class="ti ti-clipboard-list"></i> Mark Attendance</button>
+            <button class="ep-act-green"><i class="ti ti-receipt-rupee"></i> Pay Salary</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAYROLL ─── -->
+    <div class="page" id="pg-payroll">
+      <div class="phdr">
+        <div><div class="ptitle">Payroll</div><div class="psub">Week 21 · May 2026</div></div>
+        <div class="badge ba"><i class="ti ti-clock" style="font-size:11px"></i> 3 Pending</div>
+      </div>
+      <div class="sgrid">
+        <div class="sc pri"><div class="slbl">Total Payable</div><div><span class="sval">₹52,400</span></div><div class="schg" style="color:rgba(255,255,255,.6)">Bag-based</div></div>
+        <div class="sc"><div class="slbl">Advances</div><div><span class="sval">₹4,500</span></div><div class="schg dn">3 employees</div></div>
+      </div>
+      <div class="card" style="margin-bottom:13px">
+        <div class="slabel" style="margin-bottom:10px"><i class="ti ti-adjustments"></i> Payroll Type</div>
+        <div class="tabbar" style="margin-bottom:0">
+          <button class="tab on" id="pay-type-bag" onclick="setPayType('bag')"><i class="ti ti-package"></i> Bag Production</button>
+          <button class="tab" id="pay-type-shift" onclick="setPayType('shift')"><i class="ti ti-clock"></i> Shift-wise</button>
+        </div>
+      </div>
+      <div class="payroll-start-wrap" id="payroll-start-banner">
+        <div>
+          <div class="payroll-start-title"><i class="ti ti-player-play"></i> Start Weekly Payroll</div>
+          <div class="payroll-start-sub">Calculate salary for all employees</div>
+        </div>
+        <button class="payroll-start-btn" onclick="confirmStartPayroll()"><i class="ti ti-calculator"></i> Start</button>
+      </div>
+      <div class="slabel"><i class="ti ti-list"></i> Salary Breakdown</div>
+      <div id="payroll-list"></div>
+    </div>
+
+    <!-- ─── REPORTS ─── -->
+    <div class="page" id="pg-reports">
+      <div class="phdr"><div><div class="ptitle">Reports</div><div class="psub">Download as PDF</div></div></div>
+      <div class="slabel"><i class="ti ti-file-analytics"></i> Quick Reports</div>
+      <div class="repcard">
+        <div class="cico ci-b"><i class="ti ti-box"></i></div>
+        <div class="rep-info"><div class="ctitle">Stock Report</div><div class="csub">Color-wise, bag-wise inventory</div></div>
+        <button class="rep-dl-btn" onclick="openRepPicker('Stock Report')"><i class="ti ti-download"></i> PDF</button>
+      </div>
+      <div class="repcard">
+        <div class="cico ci-n"><i class="ti ti-receipt-rupee"></i></div>
+        <div class="rep-info"><div class="ctitle">Payroll Report</div><div class="csub">Weekly salary, deductions</div></div>
+        <button class="rep-dl-btn" onclick="openRepPicker('Payroll Report')"><i class="ti ti-download"></i> PDF</button>
+      </div>
+      <div class="repcard">
+        <div class="cico ci-g"><i class="ti ti-users"></i></div>
+        <div class="rep-info"><div class="ctitle">Employee Report</div><div class="csub">Attendance, salary history</div></div>
+        <button class="rep-dl-btn" onclick="openRepPicker('Employee Report')"><i class="ti ti-download"></i> PDF</button>
+      </div>
+      <div class="repcard">
+        <div class="cico ci-a"><i class="ti ti-chart-bar"></i></div>
+        <div class="rep-info"><div class="ctitle">Production Summary</div><div class="csub">Daily/weekly bag production KG</div></div>
+        <button class="rep-dl-btn" onclick="openRepPicker('Production Summary')"><i class="ti ti-download"></i> PDF</button>
+      </div>
+      <div class="slabel" style="margin-top:4px"><i class="ti ti-building"></i> Suppliers</div>
+      <div class="lwrap">
+        <div class="li"><div class="lav" style="background:var(--BL);color:#0C447C;font-weight:700;font-size:12px">RT</div><div class="linf"><div class="lname">Rajan Textiles</div><div class="ldet"><i class="ti ti-truck-delivery" style="font-size:11px;margin-right:3px"></i>5 deliveries · 3,240 KG</div></div><i class="ti ti-chevron-right" style="color:var(--T3);font-size:16px"></i></div>
+        <div class="li"><div class="lav" style="background:var(--GL);color:#166534;font-weight:700;font-size:12px">KY</div><div class="linf"><div class="lname">Kumar Yarn Co.</div><div class="ldet"><i class="ti ti-truck-delivery" style="font-size:11px;margin-right:3px"></i>3 deliveries · 1,867 KG</div></div><i class="ti ti-chevron-right" style="color:var(--T3);font-size:16px"></i></div>
+        <div class="li"><div class="lav" style="background:var(--AL);color:#92400E;font-weight:700;font-size:12px">SV</div><div class="linf"><div class="lname">Sri Venkata Fibers</div><div class="ldet"><i class="ti ti-truck-delivery" style="font-size:11px;margin-right:3px"></i>2 deliveries · 2,488 KG</div></div><i class="ti ti-chevron-right" style="color:var(--T3);font-size:16px"></i></div>
+      </div>
+    </div>
+
+    <!-- ─── PROFILE ─── -->
+    <div class="page" id="pg-profile" style="padding:0">
+      <div id="prof-main-wrap" style="padding:14px">
+        <div class="prof-hero">
+          <div class="prof-av"><i class="ti ti-user" style="font-size:22px"></i></div>
+          <div>
+            <div class="prof-name">Gunaretnam K.</div>
+            <div class="prof-det"><i class="ti ti-device-mobile" style="font-size:11px;margin-right:3px"></i>+91 98765 43210</div>
+            <div class="prof-det"><i class="ti ti-building-factory-2" style="font-size:11px;margin-right:3px"></i>Guna's TFO · Erode</div>
+          </div>
+        </div>
+        <div class="slabel"><i class="ti ti-settings"></i> Settings</div>
+        <div class="pmenu">
+          <div class="pmi" onclick="showSub('sub-factory')"><div class="pmico ci-b"><i class="ti ti-building-factory-2"></i></div><div class="pmi-info"><div class="pmlbl">Factory Settings</div><div class="pmsub">Name, logo, address</div></div><i class="ti ti-chevron-right pmi-arr"></i></div>
+          <div class="pmi" onclick="showSub('sub-notif')"><div class="pmico ci-g"><i class="ti ti-bell"></i></div><div class="pmi-info"><div class="pmlbl">Notifications</div><div class="pmsub">WhatsApp, SMS alerts</div></div><i class="ti ti-chevron-right pmi-arr"></i></div>
+          <div class="pmi" onclick="showSub('sub-lang')"><div class="pmico ci-a"><i class="ti ti-language"></i></div><div class="pmi-info"><div class="pmlbl">Language</div><div class="pmsub">English / Tamil</div></div><i class="ti ti-chevron-right pmi-arr"></i></div>
+          <div class="pmi" onclick="showSub('sub-data')"><div class="pmico ci-n"><i class="ti ti-database"></i></div><div class="pmi-info"><div class="pmlbl">Data &amp; Backup</div><div class="pmsub">Cloud sync, export</div></div><i class="ti ti-chevron-right pmi-arr"></i></div>
+          <div class="pmi" onclick="doLogout()"><div class="pmico" style="background:var(--RL)"><i class="ti ti-logout" style="color:var(--R)"></i></div><div class="pmi-info"><div class="pmlbl" style="color:var(--R)">Logout</div><div class="pmsub">Sign out of TFO One</div></div></div>
+        </div>
+        <div class="app-version">TFO One v1.1.0 · PWA Ready</div>
+      </div>
+      <!-- Factory Settings Sub -->
+      <div class="subscreen" id="sub-factory">
+        <div class="sub-hdr"><button class="icon-btn ib-back" onclick="hideSub()"><i class="ti ti-arrow-left"></i></button><div class="sub-title">Factory Settings</div></div>
+        <div class="sub-body">
+          <div class="fgrp"><label class="flbl"><i class="ti ti-building-factory-2"></i> Factory Name</label><input type="text" class="finp" value="Guna's TFO"></div>
+          <div class="fgrp"><label class="flbl"><i class="ti ti-user"></i> Owner Name</label><input type="text" class="finp" value="Gunaretnam K."></div>
+          <div class="fgrp"><label class="flbl"><i class="ti ti-map-pin"></i> Address</label><input type="text" class="finp" value="Erode, Tamil Nadu"></div>
+          <div class="fgrp">
+            <label class="flbl"><i class="ti ti-photo"></i> Logo</label>
+            <div class="upload-box"><i class="ti ti-photo" style="font-size:24px;color:var(--T3)"></i><div class="upload-text">Tap to upload logo</div></div>
+          </div>
+          <button class="bpri" onclick="showToast('Factory settings saved');hideSub()"><i class="ti ti-check"></i> Save Changes</button>
+        </div>
+      </div>
+      <!-- Notifications Sub -->
+      <div class="subscreen" id="sub-notif">
+        <div class="sub-hdr"><button class="icon-btn ib-back" onclick="hideSub()"><i class="ti ti-arrow-left"></i></button><div class="sub-title">Notifications</div></div>
+        <div class="sub-body">
+          <div class="card">
+            <div class="notif-row"><div><div class="notif-title"><i class="ti ti-brand-whatsapp" style="color:#25D366"></i> WhatsApp Alerts</div><div class="notif-sub">Stock, payroll reminders</div></div><input type="checkbox" checked class="tog-check"></div>
+            <div class="divider"></div>
+            <div class="notif-row"><div><div class="notif-title"><i class="ti ti-message" style="color:var(--B)"></i> SMS Alerts</div><div class="notif-sub">Critical alerts via SMS</div></div><input type="checkbox" class="tog-check"></div>
+            <div class="divider"></div>
+            <div class="notif-row"><div><div class="notif-title"><i class="ti ti-bell" style="color:var(--A)"></i> Payroll Reminders</div><div class="notif-sub">Weekly Friday reminder</div></div><input type="checkbox" checked class="tog-check"></div>
+          </div>
+          <button class="bpri" onclick="showToast('Saved!');hideSub()"><i class="ti ti-check"></i> Save Changes</button>
+        </div>
+      </div>
+      <!-- Language Sub -->
+      <div class="subscreen" id="sub-lang">
+        <div class="sub-hdr"><button class="icon-btn ib-back" onclick="hideSub()"><i class="ti ti-arrow-left"></i></button><div class="sub-title">Language</div></div>
+        <div class="sub-body">
+          <div class="card" style="padding:4px 0">
+            <div class="lang-opt" onclick="setLang('en');showToast('Language: English')">
+              <div class="lang-flag en-flag">EN</div>
+              <div><div class="lname">English</div><div class="ldet">Default language</div></div>
+              <i class="ti ti-check lang-chk on" id="lchk-en"></i>
+            </div>
+            <div class="lang-opt" style="border-bottom:none" onclick="setLang('ta');showToast('மொழி: தமிழ்')">
+              <div class="lang-flag ta-flag">த</div>
+              <div><div class="lname" style="font-family:'Noto Sans Tamil',sans-serif">தமிழ்</div><div class="ldet">Tamil</div></div>
+              <i class="ti ti-check lang-chk" id="lchk-ta"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Data Sub -->
+      <div class="subscreen" id="sub-data">
+        <div class="sub-hdr"><button class="icon-btn ib-back" onclick="hideSub()"><i class="ti ti-arrow-left"></i></button><div class="sub-title">Data &amp; Backup</div></div>
+        <div class="sub-body">
+          <div class="card" style="margin-bottom:10px">
+            <div class="sync-row"><div><div class="notif-title"><i class="ti ti-cloud" style="color:var(--B)"></i> Cloud Sync</div><div class="notif-sub">Last synced: just now</div></div><div class="badge bg">Live</div></div>
+            <button class="bpri" style="margin-top:10px;font-size:13px;padding:10px" onclick="showToast('Sync complete!')"><i class="ti ti-refresh"></i> Sync Now</button>
+          </div>
+          <div class="card">
+            <div class="notif-title" style="margin-bottom:10px"><i class="ti ti-download" style="color:var(--G)"></i> Export All Data</div>
+            <button class="bpri" onclick="downloadPDF('Full Backup','all')"><i class="ti ti-file-text"></i> Download PDF Backup</button>
+          </div>
+          <div class="info-box info-a"><i class="ti ti-wifi-off" style="font-size:16px;color:var(--A);flex-shrink:0"></i><div class="info-text">Offline entries will auto-sync when internet is available</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pcontent -->
+
+  <!-- Bottom Navigation -->
+  <nav class="bnav">
+    <div class="ni on" onclick="goPage('home')" id="nav-home"><i class="ti ti-home ico"></i><span class="nlbl">Home</span></div>
+    <div class="ni" onclick="goPage('inventory')" id="nav-inventory"><i class="ti ti-box ico"></i><span class="nlbl">Stock</span></div>
+    <div class="ni" onclick="goPage('employees')" id="nav-employees"><i class="ti ti-users ico"></i><span class="nlbl">Staff</span></div>
+    <div class="ni" onclick="goPage('payroll')" id="nav-payroll"><i class="ti ti-receipt-rupee ico"></i><span class="nlbl">Payroll</span></div>
+    <div class="ni" onclick="goPage('reports')" id="nav-reports"><i class="ti ti-file-analytics ico"></i><span class="nlbl">Reports</span></div>
+  </nav>
+</div><!-- /scr-main -->
+
+<!-- ═══════ BOTTOM SHEETS ═══════ -->
+
+<!-- Yarn Inward -->
+<div class="sheet-overlay" id="sh-inward" onclick="closeBg(event,'sh-inward')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-package" style="color:var(--B)"></i>Yarn Inward</div><button class="icon-btn ib-close" onclick="closeSheet('sh-inward')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-calendar"></i> Date</label><input type="date" class="finp" value="2026-05-21"></div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-building"></i> Supplier</label><select class="finp"><option>Rajan Textiles</option><option>Kumar Yarn Co.</option><option>Sri Venkata Fibers</option><option>+ Add New Supplier</option></select></div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-palette"></i> Color</label><input type="text" class="finp" placeholder="Blue 40s"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-packages"></i> No. Bags</label><input type="number" class="finp" id="iw-b" placeholder="10" inputmode="decimal" oninput="calcWt('iw')"></div>
+    </div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-weight"></i> Bag KG</label><input type="number" class="finp" id="iw-w" value="62.250" inputmode="decimal" oninput="calcWt('iw')"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-calculator"></i> Total KG</label><input type="text" class="finp" id="iw-t" readonly style="background:var(--BG2);font-weight:700;color:var(--N)" placeholder="Auto"></div>
+    </div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-notes"></i> Notes</label><input type="text" class="finp" placeholder="Optional..."></div>
+    <button class="bpri" onclick="closeSheet('sh-inward');showToast('Inward entry saved!')"><i class="ti ti-check"></i> Save Inward Entry</button>
+  </div>
+</div>
+
+<!-- Yarn Outward -->
+<div class="sheet-overlay" id="sh-outward" onclick="closeBg(event,'sh-outward')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-truck-delivery" style="color:var(--A)"></i>Yarn Outward</div><button class="icon-btn ib-close" onclick="closeSheet('sh-outward')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-calendar"></i> Date</label><input type="date" class="finp" value="2026-05-21"></div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-building-store"></i> Party Name</label><input type="text" class="finp" placeholder="Customer / party name"></div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-palette"></i> Color</label><select class="finp"><option>Blue 40s</option><option>White 30s</option><option>Red 40s</option><option>Yellow 20s</option><option>Green 30s</option></select></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-packages"></i> No. Bags</label><input type="number" class="finp" id="ow-b" placeholder="5" inputmode="decimal" oninput="calcWt('ow')"></div>
+    </div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-weight"></i> Bag KG</label><input type="number" class="finp" id="ow-w" value="62.250" inputmode="decimal" oninput="calcWt('ow')"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-calculator"></i> Total KG</label><input type="text" class="finp" id="ow-t" readonly style="background:var(--BG2);font-weight:700;color:var(--N)" placeholder="Auto"></div>
+    </div>
+    <button class="bpri" onclick="closeSheet('sh-outward');showToast('Outward entry saved!')"><i class="ti ti-check"></i> Save Outward Entry</button>
+  </div>
+</div>
+
+<!-- Attendance -->
+<div class="sheet-overlay" id="sh-att" onclick="closeBg(event,'sh-att')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-clipboard-list" style="color:var(--G)"></i>Attendance</div><button class="icon-btn ib-close" onclick="closeSheet('sh-att')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div class="att-meta-row">
+      <div style="font-size:13px;color:var(--T2)"><i class="ti ti-calendar" style="font-size:13px;margin-right:4px"></i>21 May 2026</div>
+      <div style="display:flex;gap:6px"><span class="badge bg" id="att-pc">P: 0</span><span class="badge br" id="att-ac">A: 0</span></div>
+    </div>
+    <div class="shift-sel-row">
+      <button id="sbtn-morning" class="shift-sel-btn active" onclick="selAttShift('morning')"><i class="ti ti-sun"></i> Morning</button>
+      <button id="sbtn-night" class="shift-sel-btn" onclick="selAttShift('night')"><i class="ti ti-moon"></i> Night</button>
+    </div>
+    <div id="att-list"></div>
+    <button class="bpri" style="margin-top:13px" onclick="closeSheet('sh-att');showToast('Attendance saved!')"><i class="ti ti-check"></i> Save Attendance</button>
+  </div>
+</div>
+
+<!-- Add Employee -->
+<div class="sheet-overlay" id="sh-addEmp" onclick="closeBg(event,'sh-addEmp')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-user-plus" style="color:var(--B)"></i>Add Employee</div><button class="icon-btn ib-close" onclick="closeSheet('sh-addEmp')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div class="fgrp">
+      <label class="flbl"><i class="ti ti-camera"></i> Employee Photo (Live)</label>
+      <div id="cam-ph" onclick="capturePhoto()" class="cam-placeholder">
+        <i class="ti ti-camera" style="font-size:30px;color:var(--T3)"></i>
+        <div class="cam-text">Take Live Photo</div>
+        <div class="cam-hint">Tap to open camera</div>
+      </div>
+      <div id="cam-cap" style="display:none;text-align:center">
+        <div class="cam-captured"><i class="ti ti-user-circle" style="font-size:56px;color:var(--T3)"></i>
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
+            <button onclick="retakePhoto()" class="cam-retake-btn"><i class="ti ti-refresh"></i> Retake</button>
+            <button class="cam-use-btn"><i class="ti ti-check"></i> Use Photo</button>
+          </div>
+        </div>
+        <div class="cam-ok"><i class="ti ti-check-circle"></i> Photo captured</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-user"></i> Full Name</label><input type="text" class="finp" placeholder="Name"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-user"></i> Father's Name</label><input type="text" class="finp" placeholder="Father"></div>
+    </div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-user"></i> Mother's Name</label><input type="text" class="finp" placeholder="Mother"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-device-mobile"></i> Mobile</label><input type="tel" class="finp" placeholder="98765 43210" inputmode="tel"></div>
+    </div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-droplet" style="color:var(--R)"></i> Blood Group</label><select class="finp"><option value="">Select</option><option>A+</option><option>A−</option><option>B+</option><option>B−</option><option>AB+</option><option>AB−</option><option>O+</option><option>O−</option></select></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-cake"></i> Date of Birth</label><input type="date" class="finp"></div>
+    </div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-id"></i> Aadhaar Number</label><input type="text" class="finp" placeholder="XXXX XXXX XXXX" maxlength="14" inputmode="numeric"></div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-tag"></i> Pay Type</label><select class="finp"><option>Bag Production</option><option>Shift-based</option></select></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-sun"></i> Shift</label><select class="finp"><option>Morning</option><option>Night</option></select></div>
+    </div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-coins"></i> Rate/Bag (₹)</label><input type="number" class="finp" placeholder="28" inputmode="decimal"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-calendar"></i> Joining Date</label><input type="date" class="finp" value="2026-05-21"></div>
+    </div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-map-pin"></i> Address</label><input type="text" class="finp" placeholder="Full address"></div>
+    <div class="info-box info-a" style="margin-top:2px"><i class="ti ti-upload" style="font-size:15px;color:var(--A);flex-shrink:0"></i><div class="info-text">Upload Aadhaar &amp; ID documents (PDF/Image)</div></div>
+    <button class="bpri" onclick="closeSheet('sh-addEmp');showToast('Employee added!')"><i class="ti ti-user-check"></i> Add Employee</button>
+  </div>
+</div>
+
+<!-- Edit Stock -->
+<div class="sheet-overlay" id="sh-editstock" onclick="closeBg(event,'sh-editstock')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-pencil" style="color:var(--B)"></i>Edit Stock</div><button class="icon-btn ib-close" onclick="closeSheet('sh-editstock')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div class="stock-edit-hdr">
+      <div id="es-dot" style="width:14px;height:14px;border-radius:50%;background:#3B82F6;flex-shrink:0"></div>
+      <div style="font-size:15px;font-weight:700;color:var(--N)" id="es-name">Blue 40s</div>
+    </div>
+    <div class="frow">
+      <div class="fgrp"><label class="flbl"><i class="ti ti-weight"></i> KG</label><input type="number" class="finp" id="es-kg" inputmode="decimal"></div>
+      <div class="fgrp"><label class="flbl"><i class="ti ti-packages"></i> Bags</label><input type="number" class="finp" id="es-bg" inputmode="decimal"></div>
+    </div>
+    <div class="fgrp"><label class="flbl"><i class="ti ti-notes"></i> Reason for Edit</label><input type="text" class="finp" placeholder="e.g. Stock correction"></div>
+    <button class="bpri" onclick="closeSheet('sh-editstock');showToast('Stock updated!')"><i class="ti ti-check"></i> Save Stock</button>
+    <div style="height:8px"></div>
+    <button class="btn-danger" onclick="closeSheet('sh-editstock')"><i class="ti ti-trash"></i> Remove Color / Clear Stock</button>
+  </div>
+</div>
+
+<!-- Report Date Picker -->
+<div class="sheet-overlay" id="sh-report" onclick="closeBg(event,'sh-report')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-file-analytics" style="color:var(--N)"></i><span id="rep-title-disp">Report</span></div><button class="icon-btn ib-close" onclick="closeSheet('sh-report')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div style="font-size:13px;color:var(--T2);margin-bottom:12px"><i class="ti ti-calendar" style="margin-right:4px"></i>Select date range for PDF download</div>
+    <div class="date-opt-grid">
+      <div class="dopt sel" id="dopt-today" onclick="selDateOpt('today',this)"><i class="ti ti-calendar-event" style="font-size:20px"></i><div>Today</div></div>
+      <div class="dopt" id="dopt-week" onclick="selDateOpt('week',this)"><i class="ti ti-calendar-week" style="font-size:20px"></i><div>1 Week</div></div>
+      <div class="dopt" id="dopt-month" onclick="selDateOpt('month',this)"><i class="ti ti-calendar-month" style="font-size:20px"></i><div>1 Month</div></div>
+      <div class="dopt" id="dopt-custom" onclick="selDateOpt('custom',this)"><i class="ti ti-calendar-plus" style="font-size:20px"></i><div>Custom</div></div>
+    </div>
+    <div class="custom-range" id="custom-range-row">
+      <div class="fgrp" style="flex:1;margin-bottom:0"><label class="flbl">From</label><input type="date" class="finp" id="rep-from"></div>
+      <div class="fgrp" style="flex:1;margin-bottom:0"><label class="flbl">To</label><input type="date" class="finp" id="rep-to"></div>
+    </div>
+    <div style="height:13px"></div>
+    <button class="bpri" onclick="doDownloadReport()"><i class="ti ti-download"></i> Download PDF</button>
+  </div>
+</div>
+
+<!-- Payroll Edit -->
+<div class="sheet-overlay" id="sh-payedit" onclick="closeBg(event,'sh-payedit')">
+  <div class="sheet-inner">
+    <div class="shandle"></div>
+    <div class="shdr"><div class="stitle"><i class="ti ti-pencil" style="color:var(--N)"></i>Edit Payroll</div><button class="icon-btn ib-close" onclick="closeSheet('sh-payedit')" aria-label="Close"><i class="ti ti-x"></i></button></div>
+    <div id="pay-edit-content"></div>
+    <button class="bpri" style="margin-top:13px" onclick="closeSheet('sh-payedit');showToast('Payroll updated!')"><i class="ti ti-check"></i> Save Changes</button>
+  </div>
+</div>
+
+<!-- ═══ DIALOGS ═══ -->
+<div class="toast" id="toast"></div>
+
+<div class="confirm-overlay" id="conf-del" onclick="confBg(event,'conf-del')">
+  <div class="confirm-box">
+    <div class="conf-icon-wrap" style="background:var(--RL)"><i class="ti ti-trash" style="font-size:20px;color:var(--R)"></i></div>
+    <div class="conf-title">Remove Employee?</div>
+    <div class="conf-msg">This will permanently remove the employee and all their records. This cannot be undone.</div>
+    <div class="conf-btns">
+      <button class="conf-cancel" onclick="document.getElementById('conf-del').classList.remove('open')">Cancel</button>
+      <button class="conf-ok conf-del-btn" onclick="doDeleteEmployee()"><i class="ti ti-trash"></i> Yes, Remove</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="conf-payroll" onclick="confBg(event,'conf-payroll')">
+  <div class="confirm-box">
+    <div class="conf-icon-wrap" style="background:var(--NL)"><i class="ti ti-calculator" style="font-size:20px;color:var(--N)"></i></div>
+    <div class="conf-title">Start Weekly Payroll?</div>
+    <div class="conf-msg">Calculate salaries for all employees based on bag production for Week 21, May 2026.</div>
+    <div class="conf-btns">
+      <button class="conf-cancel" onclick="document.getElementById('conf-payroll').classList.remove('open')">Cancel</button>
+      <button class="conf-ok conf-start-btn" onclick="doStartPayroll()"><i class="ti ti-player-play"></i> Start Payroll</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
