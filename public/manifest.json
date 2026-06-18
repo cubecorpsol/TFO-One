@@ -1,0 +1,16 @@
+{
+  "short_name": "TFO One",
+  "name": "TFO One - Smart Textile Factory Management",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": ".",
+  "background_color": "#FDF8F3",
+  "theme_color": "#C8541A",
+  "display": "standalone",
+  "orientation": "portrait"
+}
