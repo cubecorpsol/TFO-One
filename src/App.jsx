@@ -978,16 +978,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('tfo_db', JSON.stringify(db));
 
-    if (!isSupabaseConfigured() || !session) return;
+    if (!isSupabaseConfigured() || !session) {
+      if (!isSupabaseConfigured() && session) {
+        console.warn("Supabase not configured - data only saved locally");
+      }
+      return;
+    }
 
     const delayDebounceFn = setTimeout(async () => {
       setCloudStatus('syncing');
       try {
         await upsertFactoryData(session.user.id, db, session.user.email);
         setCloudStatus('synced');
+        console.log("Data synced to cloud successfully");
       } catch (err) {
         console.error("Auto sync error:", err);
         setCloudStatus('offline');
+        showToast(t('failedToConnectCloud') + ': ' + (err.message || t('unknownError')), 'error');
       }
     }, 2000); // Debounce sync by 2 seconds
 
