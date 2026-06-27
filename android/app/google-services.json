@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "587828935010",
+    "project_id": "tfo-one-afccb",
+    "storage_bucket": "tfo-one-afccb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:587828935010:android:9634117b81d576fad4d43b",
+        "android_client_info": {
+          "package_name": "com.tfoone.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRWT_wuvWH-dIaCSiUknpjM95EuhnxAKg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

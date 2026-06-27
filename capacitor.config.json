@@ -1,0 +1,10 @@
+{
+  "appId": "com.tfoone.app",
+  "appName": "TFO_ONE",
+  "webDir": "dist",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}
