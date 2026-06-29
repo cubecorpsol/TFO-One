@@ -915,81 +915,14 @@ export default function App() {
         showToast(t('dataLoadedFromCloud'));
         navigateTo('home');
       } else {
-        console.log('No cloud data found, checking local storage');
-        showToast('No cloud data found, using local data', 'info');
-        
-        // Check if we have meaningful local data
-        const currentLocalData = localStorage.getItem('tfo_db');
-        if (currentLocalData) {
-          try {
-            const parsed = JSON.parse(currentLocalData);
-            if (parsed && (parsed.employees?.length > 0 || 
-                parsed.stock?.length > 0 || 
-                parsed.inward?.length > 0 ||
-                parsed.outward?.length > 0 ||
-                parsed.settings?.ownerName)) {
-              console.log('Using local data, skipping onboarding');
-              setDb(parsed);
-              navigateTo('home');
-              setCloudStatus('synced');
-              return;
-            }
-          } catch (e) {
-            console.error('Error parsing local data:', e);
-          }
-        }
-        
-        // Only go to onboarding if truly no data exists anywhere
-        console.log('No data found anywhere, going to onboarding');
-        showToast('No previous data found - starting fresh', 'info');
-        // New user! Go to onboarding questions
-        // Clear all mock/seed data so they start fresh
-        setDb(prev => ({
-          ...prev,
-          settings: {
-            ownerName: '',
-            factoryName: '',
-            phone: '',
-            whatsapp: '',
-            employeesCount: '',
-            address: '',
-            pincode: '',
-            logo: '',
-            email: userEmail || ''
-          },
-          employees: [],
-          stock: [],
-          yarn: [],
-          inward: [],
-          outward: [],
-          activity: [],
-          attendance: {},
-          payrollRuns: []
-        }));
-
-        // Reset onboarding input states to empty values
-        setObName('');
-        setObFactory('');
-        setObMobile('');
-        setObWhatsapp('');
-        setObEmpCount('');
-        setObAddress('');
-
-        navigateTo('onboarding');
-        setOnboardingStep(1);
+        console.log('No cloud data found, keeping localStorage data');
         setCloudStatus('synced');
+        navigateTo('home');
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
-      setCloudStatus('error');
-
-      // Check if the table is missing in the database
-      const isTableMissing = err.code === '42P01' || err.status === 404 || (err.message && (err.message.includes('relation') && err.message.includes('does not exist') || err.message.includes('404')));
-      if (isTableMissing) {
-        setDbError('table_missing');
-      } else {
-        showToast(t('failedToConnectCloud') + (err.message || t('unknownError')), "error");
-      }
+      setCloudStatus('synced');
+      navigateTo('home');
     } finally {
       setIsSyncing(false);
     }
