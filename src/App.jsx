@@ -3768,11 +3768,11 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <textarea value={stockForm.notes} onChange={(e) => setStockForm({...stockForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button className="btn btn-secondary" onClick={() => setShowStockModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>{t('cancel')}</button>
                 {!isAddingStock && (
-                  <button className="btn btn-danger" onClick={deleteStock}>{t('deleteStock')}</button>
+                  <button type="button" className="btn btn-danger" onClick={deleteStock}>{t('deleteStock')}</button>
                 )}
-                <button className="btn btn-primary" onClick={saveStock}>{t('saveStock')}</button>
+                <button type="button" className="btn btn-primary" onClick={saveStock}>{t('saveStock')}</button>
               </div>
             </div>
           </div>
