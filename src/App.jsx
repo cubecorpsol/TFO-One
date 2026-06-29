@@ -988,16 +988,19 @@ export default function App() {
     if (!isSupabaseConfigured() || !session) {
       if (!isSupabaseConfigured() && session) {
         console.warn("Supabase not configured - data only saved locally");
+        showToast('Supabase not configured - check environment variables', 'error');
       }
       return;
     }
 
     const delayDebounceFn = setTimeout(async () => {
       setCloudStatus('syncing');
+      console.log('Attempting to sync data to cloud for user:', session.user.id);
       try {
         await upsertFactoryData(session.user.id, db, session.user.email);
         setCloudStatus('synced');
         console.log("Data synced to cloud successfully");
+        showToast('Data saved to cloud', 'success');
       } catch (err) {
         console.error("Auto sync error:", err);
         setCloudStatus('offline');
