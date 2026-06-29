@@ -976,7 +976,7 @@ export default function App() {
       } catch (err) {
         console.error("Auto sync error:", err);
         setCloudStatus('offline');
-        showToast(t('failedToConnectCloud') + ': ' + (err.message || t('unknownError')), 'error');
+        showToast('Failed to connect to cloud: ' + (err.message || 'Unknown error'), 'error');
       }
     }, 2000); // Debounce sync by 2 seconds
 
