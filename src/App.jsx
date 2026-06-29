@@ -887,6 +887,28 @@ export default function App() {
     showToast('Loading data from cloud...', 'info');
     setIsSyncing(true);
     setCloudStatus('syncing');
+    
+    // First, try to load from localStorage as fallback
+    const localData = localStorage.getItem('tfo_db');
+    if (localData) {
+      try {
+        const parsedLocalData = JSON.parse(localData);
+        console.log('Found local data:', parsedLocalData);
+        // If local data has meaningful content, use it as backup
+        if (parsedLocalData && (parsedLocalData.employees?.length > 0 || 
+            parsedLocalData.stock?.length > 0 || 
+            parsedLocalData.inward?.length > 0 ||
+            parsedLocalData.outward?.length > 0 ||
+            parsedLocalData.settings?.ownerName)) {
+          console.log('Using local data as fallback');
+          setDb(parsedLocalData);
+          showToast('Loaded data from local storage', 'info');
+        }
+      } catch (e) {
+        console.error('Error parsing local data:', e);
+      }
+    }
+    
     try {
       const data = await fetchFactoryData(userId);
       console.log('Cloud data received:', data);
@@ -913,8 +935,31 @@ export default function App() {
         showToast(t('dataLoadedFromCloud'));
         navigateTo('home');
       } else {
-        console.log('No cloud data found, treating as new user');
-        showToast('No previous data found - starting fresh', 'info');
+        console.log('No cloud data found, checking local storage');
+        showToast('No cloud data found, using local data', 'info');
+        
+        // Check if we have meaningful local data
+        const currentLocalData = localStorage.getItem('tfo_db');
+        if (currentLocalData) {
+          try {
+            const parsed = JSON.parse(currentLocalData);
+            if (parsed && (parsed.employees?.length > 0 || 
+                parsed.stock?.length > 0 || 
+                parsed.inward?.length > 0 ||
+                parsed.outward?.length > 0 ||
+                parsed.settings?.ownerName)) {
+              console.log('Using local data, skipping onboarding');
+              navigateTo('home');
+              setCloudStatus('synced');
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing local data:', e);
+          }
+        }
+        
+        // Only go to onboarding if truly no data exists
+        console.log('No data found anywhere, going to onboarding');
         // New user! Go to onboarding questions
         // Clear all mock/seed data so they start fresh
         setDb(prev => ({
