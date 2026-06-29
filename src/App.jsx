@@ -889,27 +889,6 @@ export default function App() {
     setIsSyncing(true);
     setCloudStatus('syncing');
     
-    // First, try to load from localStorage as fallback
-    const localData = localStorage.getItem('tfo_db');
-    if (localData) {
-      try {
-        const parsedLocalData = JSON.parse(localData);
-        console.log('Found local data:', parsedLocalData);
-        // If local data has meaningful content, use it as backup
-        if (parsedLocalData && (parsedLocalData.employees?.length > 0 || 
-            parsedLocalData.stock?.length > 0 || 
-            parsedLocalData.inward?.length > 0 ||
-            parsedLocalData.outward?.length > 0 ||
-            parsedLocalData.settings?.ownerName)) {
-          console.log('Using local data as fallback');
-          setDb(parsedLocalData);
-          showToast('Loaded data from local storage', 'info');
-        }
-      } catch (e) {
-        console.error('Error parsing local data:', e);
-      }
-    }
-    
     try {
       const data = await fetchFactoryData(userId);
       console.log('Cloud data received:', data);
@@ -950,6 +929,7 @@ export default function App() {
                 parsed.outward?.length > 0 ||
                 parsed.settings?.ownerName)) {
               console.log('Using local data, skipping onboarding');
+              setDb(parsed);
               navigateTo('home');
               setCloudStatus('synced');
               return;
@@ -959,8 +939,9 @@ export default function App() {
           }
         }
         
-        // Only go to onboarding if truly no data exists
+        // Only go to onboarding if truly no data exists anywhere
         console.log('No data found anywhere, going to onboarding');
+        showToast('No previous data found - starting fresh', 'info');
         // New user! Go to onboarding questions
         // Clear all mock/seed data so they start fresh
         setDb(prev => ({
