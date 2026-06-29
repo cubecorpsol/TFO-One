@@ -154,8 +154,8 @@ const translations = {
     supplierName: "Supplier Name",
     purchaseDate: "Purchase Date",
     stockNotes: "Notes",
-    saveStock: "Save Stock",
-    deleteStock: "Delete Stock",
+    saveStock: "Stock",
+    deleteStock: "Stock",
     confirmDeleteStock: "Are you sure you want to delete this stock?",
     viewDetails: "View Details",
     employeesTab: "Employees",
@@ -2296,9 +2296,9 @@ create policy "Users can insert own factory data." on public.factory_data for in
                   }
                 }} required>
                   <option value="">{t('selectSupplier')}</option>
-                  <option value="Sri Murugan Mills">Sri Murugan Mills</option>
-                  <option value="KPR Spinners">KPR Spinners</option>
-                  <option value="Senthil Textiles">Senthil Textiles</option>
+                  {Array.from(new Set(db.inward.map(item => item.supplier).filter(Boolean))).map(supplier => (
+                    <option value={supplier} key={supplier}>{supplier}</option>
+                  ))}
                   <option value="ADD_NEW">{t('addNewSupplier')}</option>
                 </select>
               ) : (
@@ -2628,8 +2628,14 @@ create policy "Users can insert own factory data." on public.factory_data for in
             </div>
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => saveStockEdit(false)}>{t('save')}</button>
-              <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => saveStockEdit(true)}>{t('remove')}</button>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={(e) => {
+                e.preventDefault();
+                saveStockEdit(false);
+              }}>{t('save')}</button>
+              <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={(e) => {
+                e.preventDefault();
+                saveStockEdit(true);
+              }}>{t('remove')}</button>
             </div>
           </div>
         </div>
@@ -3921,11 +3927,11 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 </select>
               </div>
               <div className="dialog-buttons">
-                <button className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
                 {!isAddingEmployee && (
-                  <button className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
+                  <button type="button" className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
                 )}
-                <button className="btn btn-primary" onClick={saveEmployee}>{t('saveEmployee')}</button>
+                <button type="button" className="btn btn-primary" onClick={saveEmployee}>{t('saveEmployee')}</button>
               </div>
             </div>
           </div>
@@ -4063,9 +4069,9 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
-                <button className="btn btn-danger" onClick={deleteInward}>Delete</button>
-                <button className="btn btn-primary" onClick={saveInward}>Save</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-danger" onClick={deleteInward}>Delete</button>
+                <button type="button" className="btn btn-primary" onClick={saveInward}>Save</button>
               </div>
             </div>
           </div>
@@ -4154,9 +4160,9 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <input type="number" step="0.001" value={outwardForm.totalKg} onChange={(e) => setOutwardForm({...outwardForm, totalKg: e.target.value})} />
               </div>
               <div className="dialog-buttons">
-                <button className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
-                <button className="btn btn-danger" onClick={deleteOutward}>Delete</button>
-                <button className="btn btn-primary" onClick={saveOutward}>Save</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-danger" onClick={deleteOutward}>Delete</button>
+                <button type="button" className="btn btn-primary" onClick={saveOutward}>Save</button>
               </div>
             </div>
           </div>
