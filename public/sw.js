@@ -27,8 +27,11 @@ self.addEventListener('fetch', (e) => {
       if (cached) return cached;
       return fetch(e.request)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+          // Only cache GET requests
+          if (e.request.method === 'GET') {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+          }
           return res;
         })
         .catch(() => caches.match('/index.html'));

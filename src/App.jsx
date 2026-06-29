@@ -1296,6 +1296,31 @@ export default function App() {
     setCameraActive(false);
   };
 
+  // Activity logging
+  const addActivity = (type, data) => {
+    let badgeText;
+    if (type === 'employeeAdded') badgeText = t('employeeAdded');
+    else if (type === 'employeeUpdated') badgeText = t('employeeUpdated');
+    else if (type === 'employeeDeleted') badgeText = t('employeeDeleted');
+    else if (type === 'yarnAdded') badgeText = t('yarnAdded');
+    else if (type === 'yarnUpdated') badgeText = t('yarnUpdated');
+    else if (type === 'yarnDeleted') badgeText = t('yarnDeleted');
+    else if (type === 'stockAdded') badgeText = t('stockAdded');
+    else if (type === 'stockUpdated') badgeText = t('stockUpdated');
+    else if (type === 'stockDeleted') badgeText = t('stockDeleted');
+    else if (type === 'inward') badgeText = `+${data.kg.toFixed(2)} KG`;
+    else if (type === 'outward') badgeText = `-${data.kg.toFixed(2)} KG`;
+    else badgeText = type.replace(/([A-Z])/g, ' $1').trim();
+
+    const newActivity = {
+      type,
+      data,
+      timestamp: new Date().toLocaleString(),
+      badge: badgeText
+    };
+    setDb(prev => ({ ...prev, activity: [newActivity, ...prev.activity.slice(0, 9)] }));
+  };
+
   // Add Yarn Inward Entry state variables
   const [inwardDate, setInwardDate] = useState(new Date().toISOString().split('T')[0]);
   const [inwardSupplier, setInwardSupplier] = useState('');
@@ -3182,31 +3207,6 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         showToast(t('deleteYarn') + ' ' + t('successSave').toLowerCase());
       }
     });
-  };
-
-  // Activity logging
-  const addActivity = (type, data) => {
-    let badgeText;
-    if (type === 'employeeAdded') badgeText = t('employeeAdded');
-    else if (type === 'employeeUpdated') badgeText = t('employeeUpdated');
-    else if (type === 'employeeDeleted') badgeText = t('employeeDeleted');
-    else if (type === 'yarnAdded') badgeText = t('yarnAdded');
-    else if (type === 'yarnUpdated') badgeText = t('yarnUpdated');
-    else if (type === 'yarnDeleted') badgeText = t('yarnDeleted');
-    else if (type === 'stockAdded') badgeText = t('stockAdded');
-    else if (type === 'stockUpdated') badgeText = t('stockUpdated');
-    else if (type === 'stockDeleted') badgeText = t('stockDeleted');
-    else if (type === 'inward') badgeText = `+${data.kg.toFixed(2)} KG`;
-    else if (type === 'outward') badgeText = `-${data.kg.toFixed(2)} KG`;
-    else badgeText = type.replace(/([A-Z])/g, ' $1').trim();
-
-    const newActivity = {
-      type,
-      data,
-      timestamp: new Date().toLocaleString(),
-      badge: badgeText
-    };
-    setDb(prev => ({ ...prev, activity: [newActivity, ...prev.activity.slice(0, 9)] }));
   };
 
   // Inward CRUD operations
