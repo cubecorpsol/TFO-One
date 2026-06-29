@@ -869,6 +869,7 @@ export default function App() {
 
     // Listen to changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state changed:', _event, 'Session:', session ? 'exists' : 'null');
       setSession(session);
       if (session) {
         setCloudStatus('synced');
