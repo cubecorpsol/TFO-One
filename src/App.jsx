@@ -944,6 +944,12 @@ export default function App() {
   // Local state persistence + Automatic Cloud Sync (Debounced)
   useEffect(() => {
     localStorage.setItem('tfo_db', JSON.stringify(db));
+    console.log('localStorage saved. Current db state:', {
+      employeesCount: db.employees?.length,
+      stockCount: db.stock?.length,
+      inwardCount: db.inward?.length,
+      outwardCount: db.outward?.length
+    });
 
     if (!isSupabaseConfigured() || !session) {
       if (!isSupabaseConfigured() && session) {
@@ -956,6 +962,12 @@ export default function App() {
     const delayDebounceFn = setTimeout(async () => {
       setCloudStatus('syncing');
       console.log('Attempting to sync data to cloud for user:', session.user.id);
+      console.log('Syncing db state:', {
+        employeesCount: db.employees?.length,
+        stockCount: db.stock?.length,
+        inwardCount: db.inward?.length,
+        outwardCount: db.outward?.length
+      });
       try {
         await upsertFactoryData(session.user.id, db, session.user.email);
         setCloudStatus('synced');
