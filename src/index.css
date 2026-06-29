@@ -150,11 +150,16 @@ button, select, input {
 .btn-primary {
   background-color: var(--accent-terracotta);
   color: var(--white);
+  cursor: pointer;
 }
 
 .btn-primary:active {
   background-color: #b04312;
   transform: scale(0.98);
+}
+
+.btn-primary:hover {
+  background-color: #c94e1a;
 }
 
 .btn-secondary {

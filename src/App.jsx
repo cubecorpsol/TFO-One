@@ -1308,9 +1308,12 @@ export default function App() {
 
   const saveInwardEntry = (e) => {
     e.preventDefault();
+    console.log('saveInwardEntry called');
     const finalSupplier = showNewSupplierInput ? inwardNewSupplier : inwardSupplier;
     const bagsCount = parseInt(inwardBags);
     const weightVal = parseFloat(inwardBagWeight);
+
+    console.log('Form values:', { finalSupplier, inwardColor, bagsCount, weightVal });
 
     if (!finalSupplier || !inwardColor || !bagsCount || !weightVal) {
       showToast(t('errorFields'), 'error');
@@ -1358,6 +1361,7 @@ export default function App() {
     setInwardBags('');
     setInwardNotes('');
     setShowNewSupplierInput(false);
+    console.log('Inward entry saved successfully:', newEntry);
   };
 
   // Add Yarn Outward Entry state variables
