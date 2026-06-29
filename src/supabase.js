@@ -57,16 +57,22 @@ export const fetchFactoryData = async (userId) => {
 export const upsertFactoryData = async (userId, payload, email) => {
   if (!supabase) throw new Error("Supabase is not configured.");
   
+  console.log('upsertFactoryData: Preparing to save data for user:', userId);
+  console.log('upsertFactoryData: Payload employees count:', payload.employees?.length);
+  console.log('upsertFactoryData: Payload stock count:', payload.stock?.length);
+  console.log('upsertFactoryData: Payload inward count:', payload.inward?.length);
+  console.log('upsertFactoryData: Payload outward count:', payload.outward?.length);
+  
   const record = {
     id: userId,
     settings: payload.settings,
-    employees: payload.employees,
-    stock: payload.stock,
-    inward: payload.inward,
-    outward: payload.outward,
-    activity: payload.activity,
-    attendance: payload.attendance,
-    payroll_runs: payload.payrollRuns,
+    employees: payload.employees || [],
+    stock: payload.stock || [],
+    inward: payload.inward || [],
+    outward: payload.outward || [],
+    activity: payload.activity || [],
+    attendance: payload.attendance || {},
+    payroll_runs: payload.payrollRuns || [],
     updated_at: new Date().toISOString()
   };
 
@@ -76,9 +82,19 @@ export const upsertFactoryData = async (userId, payload, email) => {
     record.email = userEmail;
   }
 
-  const { error } = await supabase
+  console.log('upsertFactoryData: Record to save:', record);
+  
+  const { error, data } = await supabase
     .from('factory_data')
     .upsert(record);
 
-  if (error) throw error;
+  console.log('upsertFactoryData: Response data:', data);
+  console.log('upsertFactoryData: Response error:', error);
+
+  if (error) {
+    console.error('upsertFactoryData: Error saving data:', error);
+    throw error;
+  }
+  
+  console.log('upsertFactoryData: Data saved successfully');
 };
