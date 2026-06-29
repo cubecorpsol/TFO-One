@@ -883,10 +883,12 @@ export default function App() {
   }, []);
 
   const loadDataFromCloud = async (userId, userEmail) => {
+    console.log('Loading data from cloud for user:', userId);
     setIsSyncing(true);
     setCloudStatus('syncing');
     try {
       const data = await fetchFactoryData(userId);
+      console.log('Cloud data received:', data);
       if (data) {
         // Merge cloud data with state
         const mergedDb = {
@@ -903,11 +905,13 @@ export default function App() {
           attendance: data.attendance || {},
           payrollRuns: data.payroll_runs || []
         };
+        console.log('Setting merged DB:', mergedDb);
         setDb(mergedDb);
         setCloudStatus('synced');
         showToast(t('dataLoadedFromCloud'));
         navigateTo('home');
       } else {
+        console.log('No cloud data found, treating as new user');
         // New user! Go to onboarding questions
         // Clear all mock/seed data so they start fresh
         setDb(prev => ({
