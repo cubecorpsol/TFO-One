@@ -30,11 +30,15 @@ export const signOutUser = async () => {
 // Sync helpers
 export const fetchFactoryData = async (userId) => {
   if (!supabase) throw new Error("Supabase is not configured.");
+  console.log('fetchFactoryData: Fetching data for user:', userId);
   const { data, error } = await supabase
     .from('factory_data')
     .select('*')
     .eq('id', userId)
     .single();
+
+  console.log('fetchFactoryData: Response data:', data);
+  console.log('fetchFactoryData: Response error:', error);
 
   if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
     throw error;
