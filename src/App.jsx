@@ -2310,7 +2310,10 @@ create policy "Users can insert own factory data." on public.factory_data for in
               <textarea value={inwardNotes} onChange={(e) => setInwardNotes(e.target.value)} placeholder="Add any details..."></textarea>
             </div>
 
-            <button type="submit" className="btn btn-primary mt-8">{t('saveInward')}</button>
+            <button type="button" onClick={(e) => {
+              e.preventDefault();
+              saveInwardEntry(e);
+            }} className="btn btn-primary mt-8">{t('saveInward')}</button>
           </form>
         </div>
       </div>
@@ -2383,7 +2386,10 @@ create policy "Users can insert own factory data." on public.factory_data for in
               <input type="text" disabled value={((parseInt(outwardBags) || 0) * (parseFloat(outwardBagWeight) || 0)).toFixed(3) + " KG"} style={{ backgroundColor: '#faf6f0', fontWeight: 'bold' }} />
             </div>
 
-            <button type="submit" className="btn btn-primary mt-8">{t('saveOutward')}</button>
+            <button type="button" onClick={(e) => {
+              e.preventDefault();
+              saveOutwardEntry(e);
+            }} className="btn btn-primary mt-8">{t('saveOutward')}</button>
           </form>
         </div>
       </div>
