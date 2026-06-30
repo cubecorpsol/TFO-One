@@ -4929,26 +4929,6 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
               <div className="toggle-settings-list">
                 <div className="toggle-settings-row">
                   <div className="toggle-settings-label">
-                    <span className="toggle-title">{t('whatsappAlerts')}</span>
-                    <span className="toggle-desc">{t('whatsappAlertDesc')}</span>
-                  </div>
-                  <label className="switch">
-                    <input type="checkbox" checked={waAlerts} onChange={() => handleToggleNotification('whatsappAlerts', waAlerts)} />
-                    <span className="slider round"></span>
-                  </label>
-                </div>
-                <div className="toggle-settings-row">
-                  <div className="toggle-settings-label">
-                    <span className="toggle-title">{t('smsAlerts')}</span>
-                    <span className="toggle-desc">{t('smsAlertDescAttendance')}</span>
-                  </div>
-                  <label className="switch">
-                    <input type="checkbox" checked={smsAlerts} onChange={() => handleToggleNotification('smsAlerts', smsAlerts)} />
-                    <span className="slider round"></span>
-                  </label>
-                </div>
-                <div className="toggle-settings-row">
-                  <div className="toggle-settings-label">
                     <span className="toggle-title">{t('reminders')}</span>
                     <span className="toggle-desc">{t('remindersDesc')}</span>
                   </div>
