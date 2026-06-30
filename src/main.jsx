@@ -40,7 +40,23 @@ if ('serviceWorker' in navigator) {
     // In production: register the service worker for PWA caching
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
-        .then((reg) => console.log('Service Worker registered:', reg.scope))
+        .then((reg) => {
+          console.log('Service Worker registered:', reg.scope);
+          // Check for updates and auto-reload to use new assets immediately
+          reg.onupdatefound = () => {
+            const installingWorker = reg.installing;
+            if (installingWorker) {
+              installingWorker.onstatechange = () => {
+                if (installingWorker.state === 'installed') {
+                  if (navigator.serviceWorker.controller) {
+                    console.log('New update installed. Reloading...');
+                    window.location.reload();
+                  }
+                }
+              };
+            }
+          };
+        })
         .catch((err) => console.error('Service worker registration failed:', err));
     });
   }

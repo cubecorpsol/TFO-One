@@ -790,7 +790,7 @@ const DEFAULT_ACTIVITY = [
 export default function App() {
   // State Initialization
   const [lang, setLang] = useState('en');
-  const [screen, setScreen] = useState('auth'); // auth, onboarding, home, stock, staff, payroll, reports, settings, employee_profile
+  const [screen, setScreen] = useState(isSupabaseConfigured() ? 'loading' : 'auth'); // loading, auth, onboarding, home, stock, staff, payroll, reports, settings, employee_profile
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -805,61 +805,43 @@ export default function App() {
 
   // Local Database State with IndexedDB as primary storage
   const [db, setDb] = useState(() => {
-    console.log('App init: Loading from IndexedDB');
-    
-    // Try IndexedDB first (most reliable)
-    loadFromDB().then(data => {
-      if (data) {
-        const hasData = data && (
-          data.employees?.length > 0 ||
-          data.stock?.length > 0 ||
-          data.inward?.length > 0 ||
-          data.outward?.length > 0 ||
-          (data.settings?.ownerName && data.settings.ownerName !== "Guna S")
-        );
-        if (hasData) {
-          console.log('App init: Loaded from IndexedDB with data:', {
-            employeesCount: data.employees?.length,
-            stockCount: data.stock?.length,
-            inwardCount: data.inward?.length,
-            outwardCount: data.outward?.length
-          });
-          setDb(data);
-          return;
-        }
+    if (isSupabaseConfigured()) {
+      // Supabase mode: try localStorage cache first (fast restore for returning users)
+      const local = localStorage.getItem('tfo_db');
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          // Only restore if the user has completed onboarding (real data, not defaults)
+          if (parsed?.settings?.onboardingComplete) {
+            return parsed;
+          }
+        } catch (e) { /* ignore */ }
       }
-      console.log('App init: IndexedDB empty or no data, using defaults');
-    }).catch(err => {
-      console.error('App init: IndexedDB error:', err);
-    });
-    
+      // Brand-new or no valid cache — start completely empty
+      return {
+        settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', email: '', onboardingComplete: false },
+        employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
+      };
+    }
+
+    // --- Local / Demo mode (no Supabase) ---
+    // Try IndexedDB first
+    loadFromDB().then(data => {
+      if (data?.settings?.onboardingComplete) {
+        setDb(data);
+      }
+    }).catch(() => {});
+
     // Fallback to localStorage
     const local = localStorage.getItem('tfo_db');
     if (local) {
       try {
         const parsed = JSON.parse(local);
-        const hasData = parsed && (
-          parsed.employees?.length > 0 ||
-          parsed.stock?.length > 0 ||
-          parsed.inward?.length > 0 ||
-          parsed.outward?.length > 0 ||
-          (parsed.settings?.ownerName && parsed.settings.ownerName !== "Guna S")
-        );
-        if (hasData) {
-          console.log('App init: Loaded from localStorage with data:', {
-            employeesCount: parsed.employees?.length,
-            stockCount: parsed.stock?.length,
-            inwardCount: parsed.inward?.length,
-            outwardCount: parsed.outward?.length
-          });
-          return parsed;
-        }
-      } catch (e) {
-        console.error('App init: Error parsing localStorage:', e);
-      }
+        if (parsed?.settings?.onboardingComplete) return parsed;
+      } catch (e) { /* ignore */ }
     }
-    
-    console.log('App init: Using default data - no data found in storage');
+
+    // Demo defaults
     return {
       settings: DEFAULT_FACTORY_SETTINGS,
       employees: DEFAULT_EMPLOYEES,
@@ -868,7 +850,7 @@ export default function App() {
       inward: DEFAULT_INWARD,
       outward: DEFAULT_OUTWARD,
       activity: DEFAULT_ACTIVITY,
-      attendance: {}, // key: YYYY-MM-DD_Shift -> { empId: 'present'/'absent' }
+      attendance: {},
       payrollRuns: []
     };
   });
@@ -905,26 +887,40 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured()) {
       setCloudStatus('local');
+      // No Supabase — stay on auth screen (already set as initial state)
       return;
     }
 
+    // Timeout fallback: if auth check takes > 6s, fall back to auth screen
+    const authTimeout = setTimeout(() => {
+      console.warn('Auth check timed out, showing auth screen');
+      setScreen('auth');
+      setCloudStatus('offline');
+    }, 6000);
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(authTimeout);
       setSession(session);
       if (session) {
-        setCloudStatus('synced');
+        setCloudStatus('syncing');
         loadDataFromCloud(session.user.id, session.user.email);
       } else {
         setCloudStatus('offline');
+        setScreen('auth');
       }
+    }).catch(() => {
+      clearTimeout(authTimeout);
+      setCloudStatus('offline');
+      setScreen('auth');
     });
 
-    // Listen to changes
+    // Listen to auth state changes (OAuth redirect, sign-out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', _event, 'Session:', session ? 'exists' : 'null');
+      console.log('Auth state changed:', _event);
       setSession(session);
       if (session) {
-        setCloudStatus('synced');
+        setCloudStatus('syncing');
         loadDataFromCloud(session.user.id, session.user.email);
       } else {
         setCloudStatus('offline');
@@ -932,7 +928,10 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(authTimeout);
+    };
   }, []);
 
   const loadDataFromCloud = async (userId, userEmail) => {
@@ -1946,7 +1945,7 @@ export default function App() {
       {/* ==========================================
           HEADER SECTION (Visible when logged in)
           ========================================== */}
-      {screen !== 'auth' && screen !== 'onboarding' && (
+      {screen !== 'auth' && screen !== 'onboarding' && screen !== 'loading' && (
         <header className="app-header">
           <a href="#" className="app-logo" onClick={() => navigateTo('home')}>
             <img src={logo} alt="TFO One" className="logo-image" />
@@ -1967,6 +1966,17 @@ export default function App() {
           SCREEN PANELS WIDGET
           ========================================== */}
       <main className="app-content">
+
+        {/* 0. LOADING / SPLASH SCREEN */}
+        {screen === 'loading' && (
+          <div className="loading-splash">
+            <div className="loading-splash-inner">
+              <img src={logo} alt="TFO One" className="loading-splash-logo" />
+              <div className="loading-spinner-ring"></div>
+              <p className="loading-splash-text">Loading your workspace…</p>
+            </div>
+          </div>
+        )}
 
         {/* 1. AUTHENTICATION SCREEN */}
         {screen === 'auth' && (
@@ -2375,7 +2385,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
       {/* ==========================================
           BOTTOM NAVIGATION BAR
           ========================================== */}
-      {screen !== 'auth' && screen !== 'onboarding' && (
+      {screen !== 'auth' && screen !== 'onboarding' && screen !== 'loading' && (
         <nav className="app-bottom-nav">
           <button className={`nav-tab ${screen === 'home' ? 'active' : ''}`} onClick={() => navigateTo('home')}>
             <i className="ti ti-home-2"></i>
