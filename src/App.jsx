@@ -9,6 +9,7 @@ import {
   fetchFactoryData,
   upsertFactoryData
 } from './supabase';
+import { saveToDB, loadFromDB } from './indexedDB.js';
 import { PushNotifications } from '@capacitor/push-notifications';
 
 // ==========================================
@@ -802,11 +803,37 @@ export default function App() {
   const [isSignUpView, setIsSignUpView] = useState(false);
   const [dbError, setDbError] = useState(null);
 
-  // Local Database State with multiple storage fallbacks
+  // Local Database State with IndexedDB as primary storage
   const [db, setDb] = useState(() => {
-    console.log('App init: Loading from multiple storage sources');
+    console.log('App init: Loading from IndexedDB');
     
-    // Try localStorage first
+    // Try IndexedDB first (most reliable)
+    loadFromDB().then(data => {
+      if (data) {
+        const hasData = data && (
+          data.employees?.length > 0 ||
+          data.stock?.length > 0 ||
+          data.inward?.length > 0 ||
+          data.outward?.length > 0 ||
+          (data.settings?.ownerName && data.settings.ownerName !== "Guna S")
+        );
+        if (hasData) {
+          console.log('App init: Loaded from IndexedDB with data:', {
+            employeesCount: data.employees?.length,
+            stockCount: data.stock?.length,
+            inwardCount: data.inward?.length,
+            outwardCount: data.outward?.length
+          });
+          setDb(data);
+          return;
+        }
+      }
+      console.log('App init: IndexedDB empty or no data, using defaults');
+    }).catch(err => {
+      console.error('App init: IndexedDB error:', err);
+    });
+    
+    // Fallback to localStorage
     const local = localStorage.getItem('tfo_db');
     if (local) {
       try {
@@ -829,34 +856,6 @@ export default function App() {
         }
       } catch (e) {
         console.error('App init: Error parsing localStorage:', e);
-      }
-    }
-    
-    // Try sessionStorage as fallback
-    const session = sessionStorage.getItem('tfo_db');
-    if (session) {
-      try {
-        const parsed = JSON.parse(session);
-        const hasData = parsed && (
-          parsed.employees?.length > 0 ||
-          parsed.stock?.length > 0 ||
-          parsed.inward?.length > 0 ||
-          parsed.outward?.length > 0 ||
-          (parsed.settings?.ownerName && parsed.settings.ownerName !== "Guna S")
-        );
-        if (hasData) {
-          console.log('App init: Loaded from sessionStorage with data:', {
-            employeesCount: parsed.employees?.length,
-            stockCount: parsed.stock?.length,
-            inwardCount: parsed.inward?.length,
-            outwardCount: parsed.outward?.length
-          });
-          // Restore to localStorage
-          localStorage.setItem('tfo_db', session);
-          return parsed;
-        }
-      } catch (e) {
-        console.error('App init: Error parsing sessionStorage:', e);
       }
     }
     
@@ -1022,13 +1021,20 @@ export default function App() {
 
   // Local state persistence + Automatic Cloud Sync (Debounced)
   useEffect(() => {
-    console.log('useEffect triggered - saving to multiple storage sources');
+    console.log('useEffect triggered - saving to IndexedDB and localStorage');
     const dbString = JSON.stringify(db);
     
-    // Save to localStorage
+    // Save to IndexedDB (primary storage)
+    saveToDB(db).then(() => {
+      console.log('IndexedDB saved successfully');
+    }).catch(err => {
+      console.error('IndexedDB save error:', err);
+    });
+    
+    // Save to localStorage as backup
     localStorage.setItem('tfo_db', dbString);
     
-    // Save to sessionStorage as backup
+    // Save to sessionStorage as additional backup
     sessionStorage.setItem('tfo_db', dbString);
     
     console.log('Storage saved. Current db state:', {
