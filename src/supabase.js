@@ -14,7 +14,9 @@ export const supabase = isSupabaseConfigured()
         autoRefreshToken: true,
         detectSessionInUrl: true,
         storage: window.localStorage,
-        storageKey: 'supabase-auth'
+        storageKey: 'supabase-auth',
+        flowType: 'pkce', // Use PKCE flow for better mobile support
+        debug: true // Enable auth debugging
       }
     })
   : null;

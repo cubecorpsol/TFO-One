@@ -1152,7 +1152,12 @@ export default function App() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin,
+          queryParams: {
+            prompt: 'select_account', // Force account selection on mobile
+            access_type: 'offline' // Get refresh token for better persistence
+          },
+          skipBrowserRedirect: false // Ensure proper redirect handling
         }
       });
       if (error) throw error;
@@ -1398,15 +1403,15 @@ export default function App() {
   // Activity logging
   const addActivity = (type, data) => {
     let badgeText;
-    if (type === 'employeeAdded') badgeText = t('employeeAdded');
-    else if (type === 'employeeUpdated') badgeText = t('employeeUpdated');
-    else if (type === 'employeeDeleted') badgeText = t('employeeDeleted');
-    else if (type === 'yarnAdded') badgeText = t('yarnAdded');
-    else if (type === 'yarnUpdated') badgeText = t('yarnUpdated');
-    else if (type === 'yarnDeleted') badgeText = t('yarnDeleted');
-    else if (type === 'stockAdded') badgeText = t('stockAdded');
-    else if (type === 'stockUpdated') badgeText = t('stockUpdated');
-    else if (type === 'stockDeleted') badgeText = t('stockDeleted');
+    if (type === 'employeeAdded') badgeText = 'Employee added';
+    else if (type === 'employeeUpdated') badgeText = 'Employee updated';
+    else if (type === 'employeeDeleted') badgeText = 'Employee deleted';
+    else if (type === 'yarnAdded') badgeText = 'Yarn added';
+    else if (type === 'yarnUpdated') badgeText = 'Yarn updated';
+    else if (type === 'yarnDeleted') badgeText = 'Yarn deleted';
+    else if (type === 'stockAdded') badgeText = 'Stock added';
+    else if (type === 'stockUpdated') badgeText = 'Stock updated';
+    else if (type === 'stockDeleted') badgeText = 'Stock deleted';
     else if (type === 'inward') badgeText = `+${data.kg.toFixed(2)} KG`;
     else if (type === 'outward') badgeText = `-${data.kg.toFixed(2)} KG`;
     else badgeText = type.replace(/([A-Z])/g, ' $1').trim();
