@@ -937,7 +937,6 @@ export default function App() {
 
   const loadDataFromCloud = async (userId, userEmail) => {
     console.log('Loading data from cloud for user:', userId);
-    console.log('Current localStorage data:', localStorage.getItem('tfo_db'));
     setIsSyncing(true);
     setCloudStatus('syncing');
     
@@ -945,7 +944,6 @@ export default function App() {
       const data = await fetchFactoryData(userId);
       console.log('Cloud data received:', data);
       if (data) {
-        showToast('Data found in cloud, loading...', 'info');
         // Merge cloud data with state
         const mergedDb = {
           settings: {
@@ -961,41 +959,39 @@ export default function App() {
           attendance: data.attendance || {},
           payrollRuns: data.payroll_runs || []
         };
-        console.log('Setting merged DB:', mergedDb);
         setDb(mergedDb);
         setCloudStatus('synced');
-        showToast('Data loaded from cloud');
-        navigateTo('home');
-      } else {
-        console.log('No cloud data found, checking localStorage');
-        // Check if localStorage has meaningful data
-        const localData = localStorage.getItem('tfo_db');
-        if (localData) {
-          try {
-            const parsed = JSON.parse(localData);
-            const hasRealData = parsed && (
-              parsed.employees?.length > 0 ||
-              parsed.stock?.length > 0 ||
-              parsed.inward?.length > 0 ||
-              parsed.outward?.length > 0 ||
-              (parsed.settings?.ownerName && parsed.settings.ownerName !== "Guna S") ||
-              (parsed.settings?.factoryName && parsed.settings.factoryName !== "Guna's TFO Mills")
-            );
-            console.log('Has real data in localStorage:', hasRealData);
-            if (hasRealData) {
-              console.log('Using localStorage data, going to home');
-              setCloudStatus('synced');
-              navigateTo('home');
-              return;
-            }
-          } catch (e) {
-            console.error('Error parsing localStorage:', e);
-          }
+        // If the user completed onboarding before → home; else → onboarding
+        if (data.settings?.onboardingComplete) {
+          navigateTo('home');
+        } else {
+          console.log('Cloud user has not completed onboarding, going to onboarding');
+          navigateTo('onboarding');
+          setOnboardingStep(1);
         }
-        console.log('No meaningful data found, going to onboarding');
+      } else {
+        // No cloud record at all — this is a brand-new user
+        // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
+        let completedLocally = false;
+        try {
+          const localData = localStorage.getItem('tfo_db');
+          if (localData) {
+            const parsed = JSON.parse(localData);
+            completedLocally = !!parsed?.settings?.onboardingComplete;
+          }
+        } catch (e) {
+          console.error('Error parsing localStorage:', e);
+        }
+
         setCloudStatus('synced');
-        navigateTo('onboarding');
-        setOnboardingStep(1);
+        if (completedLocally) {
+          console.log('Onboarding completed locally, going to home');
+          navigateTo('home');
+        } else {
+          console.log('New user — going to onboarding');
+          navigateTo('onboarding');
+          setOnboardingStep(1);
+        }
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
@@ -1009,9 +1005,7 @@ export default function App() {
   const handleFallbackToLocalDemo = () => {
     setDbError(null);
     setCloudStatus('local');
-    // Set screen to home (or onboarding if they are a new local user)
-    const isNewUser = db.settings.ownerName === "Guna S" && db.settings.factoryName === "Guna's TFO Mills";
-    if (isNewUser) {
+    if (!db.settings.onboardingComplete) {
       navigateTo('onboarding');
       setOnboardingStep(1);
     } else {
@@ -1082,8 +1076,7 @@ export default function App() {
     e.preventDefault();
     if (!isSupabaseConfigured()) {
       showToast(t('supabaseNotConfigured'), "error");
-      const isNewUser = db.settings.ownerName === "Guna S" && db.settings.factoryName === "Guna's TFO Mills";
-      if (isNewUser) {
+      if (!db.settings.onboardingComplete) {
         navigateTo('onboarding');
         setOnboardingStep(1);
       } else {
@@ -1114,8 +1107,7 @@ export default function App() {
   const handleGoogleSignIn = async () => {
     if (!isSupabaseConfigured()) {
       // Mock sign-in (Local Mode)
-      const isNewUser = db.settings.ownerName === "Guna S" && db.settings.factoryName === "Guna's TFO Mills";
-      if (isNewUser) {
+      if (!db.settings.onboardingComplete) {
         navigateTo('onboarding');
         setOnboardingStep(1);
       } else {
@@ -1294,7 +1286,7 @@ export default function App() {
     if (onboardingStep < 4) {
       setOnboardingStep(prev => prev + 1);
     } else {
-      // Completed, save factory settings & setup
+      // Completed — set onboardingComplete flag so returning users skip onboarding
       const updatedDb = {
         ...db,
         settings: {
@@ -1304,7 +1296,8 @@ export default function App() {
           phone: obMobile,
           whatsapp: obMobile,
           address: obAddress,
-          email: session?.user?.email || db.settings.email || ''
+          email: session?.user?.email || db.settings.email || '',
+          onboardingComplete: true
         }
       };
 
