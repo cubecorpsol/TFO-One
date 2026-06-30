@@ -970,7 +970,7 @@ export default function App() {
           setOnboardingStep(1);
         }
       } else {
-        // No cloud record at all — this is a brand-new user
+        // No cloud record at all — this is a brand-new user.
         // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
         let completedLocally = false;
         try {
@@ -988,7 +988,32 @@ export default function App() {
           console.log('Onboarding completed locally, going to home');
           navigateTo('home');
         } else {
-          console.log('New user — going to onboarding');
+          // Brand-new user — wipe default mock data and start completely fresh
+          console.log('New user — clearing mock data and going to onboarding');
+          const freshDb = {
+            settings: {
+              ownerName: '',
+              factoryName: '',
+              phone: '',
+              whatsapp: '',
+              address: '',
+              logo: '',
+              email: userEmail || '',
+              onboardingComplete: false
+            },
+            employees: [],
+            stock: [],
+            yarn: [],
+            inward: [],
+            outward: [],
+            activity: [],
+            attendance: {},
+            payrollRuns: []
+          };
+          setDb(freshDb);
+          // Clear localStorage so stale default data doesn't survive a page refresh
+          localStorage.removeItem('tfo_db');
+          sessionStorage.removeItem('tfo_db');
           navigateTo('onboarding');
           setOnboardingStep(1);
         }
@@ -1108,6 +1133,13 @@ export default function App() {
     if (!isSupabaseConfigured()) {
       // Mock sign-in (Local Mode)
       if (!db.settings.onboardingComplete) {
+        // Fresh slate for new local users
+        setDb({
+          settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
+          employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
+        });
+        localStorage.removeItem('tfo_db');
+        sessionStorage.removeItem('tfo_db');
         navigateTo('onboarding');
         setOnboardingStep(1);
       } else {
