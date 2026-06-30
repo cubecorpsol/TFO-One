@@ -802,25 +802,65 @@ export default function App() {
   const [isSignUpView, setIsSignUpView] = useState(false);
   const [dbError, setDbError] = useState(null);
 
-  // Local Database State
+  // Local Database State with multiple storage fallbacks
   const [db, setDb] = useState(() => {
+    console.log('App init: Loading from multiple storage sources');
+    
+    // Try localStorage first
     const local = localStorage.getItem('tfo_db');
-    console.log('App init: Loading from localStorage:', local ? 'found' : 'not found');
     if (local) {
       try {
         const parsed = JSON.parse(local);
-        console.log('App init: Parsed localStorage data:', {
-          employeesCount: parsed.employees?.length,
-          stockCount: parsed.stock?.length,
-          inwardCount: parsed.inward?.length,
-          outwardCount: parsed.outward?.length
-        });
-        return parsed;
+        const hasData = parsed && (
+          parsed.employees?.length > 0 ||
+          parsed.stock?.length > 0 ||
+          parsed.inward?.length > 0 ||
+          parsed.outward?.length > 0 ||
+          (parsed.settings?.ownerName && parsed.settings.ownerName !== "Guna S")
+        );
+        if (hasData) {
+          console.log('App init: Loaded from localStorage with data:', {
+            employeesCount: parsed.employees?.length,
+            stockCount: parsed.stock?.length,
+            inwardCount: parsed.inward?.length,
+            outwardCount: parsed.outward?.length
+          });
+          return parsed;
+        }
       } catch (e) {
         console.error('App init: Error parsing localStorage:', e);
       }
     }
-    console.log('App init: Using default data');
+    
+    // Try sessionStorage as fallback
+    const session = sessionStorage.getItem('tfo_db');
+    if (session) {
+      try {
+        const parsed = JSON.parse(session);
+        const hasData = parsed && (
+          parsed.employees?.length > 0 ||
+          parsed.stock?.length > 0 ||
+          parsed.inward?.length > 0 ||
+          parsed.outward?.length > 0 ||
+          (parsed.settings?.ownerName && parsed.settings.ownerName !== "Guna S")
+        );
+        if (hasData) {
+          console.log('App init: Loaded from sessionStorage with data:', {
+            employeesCount: parsed.employees?.length,
+            stockCount: parsed.stock?.length,
+            inwardCount: parsed.inward?.length,
+            outwardCount: parsed.outward?.length
+          });
+          // Restore to localStorage
+          localStorage.setItem('tfo_db', session);
+          return parsed;
+        }
+      } catch (e) {
+        console.error('App init: Error parsing sessionStorage:', e);
+      }
+    }
+    
+    console.log('App init: Using default data - no data found in storage');
     return {
       settings: DEFAULT_FACTORY_SETTINGS,
       employees: DEFAULT_EMPLOYEES,
@@ -982,15 +1022,23 @@ export default function App() {
 
   // Local state persistence + Automatic Cloud Sync (Debounced)
   useEffect(() => {
-    console.log('useEffect triggered - saving to localStorage');
-    localStorage.setItem('tfo_db', JSON.stringify(db));
-    console.log('localStorage saved. Current db state:', {
+    console.log('useEffect triggered - saving to multiple storage sources');
+    const dbString = JSON.stringify(db);
+    
+    // Save to localStorage
+    localStorage.setItem('tfo_db', dbString);
+    
+    // Save to sessionStorage as backup
+    sessionStorage.setItem('tfo_db', dbString);
+    
+    console.log('Storage saved. Current db state:', {
       employeesCount: db.employees?.length,
       stockCount: db.stock?.length,
       inwardCount: db.inward?.length,
       outwardCount: db.outward?.length
     });
     console.log('localStorage verification:', localStorage.getItem('tfo_db')?.substring(0, 100));
+    console.log('sessionStorage verification:', sessionStorage.getItem('tfo_db')?.substring(0, 100));
 
     if (!isSupabaseConfigured() || !session) {
       if (!isSupabaseConfigured() && session) {
