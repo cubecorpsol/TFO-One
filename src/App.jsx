@@ -1099,7 +1099,7 @@ export default function App() {
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     if (!isSupabaseConfigured()) {
-      showToast(t('supabaseNotConfigured'), "error");
+      showToast('Supabase is not configured', "error");
       if (!db.settings.onboardingComplete) {
         navigateTo('onboarding');
         setOnboardingStep(1);
@@ -1114,11 +1114,11 @@ export default function App() {
       if (isSignUpView) {
         const { data, error } = await signUpUser(authEmail, authPassword);
         if (error) throw error;
-        showToast(t('confirmationEmailSent'), "success");
+        showToast('Confirmation email sent', "success");
       } else {
         const { data, error } = await signInUser(authEmail, authPassword);
         if (error) throw error;
-        showToast(t('loggedInSuccessfully'), "success");
+        showToast('Logged in successfully', "success");
       }
     } catch (err) {
       console.error(err);
@@ -1143,7 +1143,7 @@ export default function App() {
         setOnboardingStep(1);
       } else {
         navigateTo('home');
-        showToast(t('successSave'));
+        showToast('Saved successfully');
       }
       return;
     }
@@ -1166,7 +1166,7 @@ export default function App() {
     if (isSupabaseConfigured() && session) {
       try {
         await signOutUser();
-        showToast(t('loggedOutFromCloud'));
+        showToast('Logged out from cloud');
       } catch (err) {
         console.error(err);
       }
@@ -1309,10 +1309,10 @@ export default function App() {
 
   // Onboarding next page transitions (4 steps: owner name, TFO name, mobile, location)
   const handleOnboardingNext = () => {
-    if (onboardingStep === 1 && !obName.trim()) { showToast(t('errorFields'), 'error'); return; }
-    if (onboardingStep === 2 && !obFactory.trim()) { showToast(t('errorFields'), 'error'); return; }
-    if (onboardingStep === 3 && !obMobile.trim()) { showToast(t('errorFields'), 'error'); return; }
-    if (onboardingStep === 4 && !obAddress.trim()) { showToast(t('errorFields'), 'error'); return; }
+    if (onboardingStep === 1 && !obName.trim()) { showToast('Please fill all required fields', 'error'); return; }
+    if (onboardingStep === 2 && !obFactory.trim()) { showToast('Please fill all required fields', 'error'); return; }
+    if (onboardingStep === 3 && !obMobile.trim()) { showToast('Please fill all required fields', 'error'); return; }
+    if (onboardingStep === 4 && !obAddress.trim()) { showToast('Please fill all required fields', 'error'); return; }
 
     if (onboardingStep < 4) {
       setOnboardingStep(prev => prev + 1);
@@ -1346,7 +1346,7 @@ export default function App() {
       }
 
       navigateTo('home');
-      showToast(t('successSave'));
+      showToast('Saved successfully');
     }
   };
 
@@ -1440,7 +1440,7 @@ export default function App() {
     console.log('Form values:', { finalSupplier, inwardColor, bagsCount, weightVal });
 
     if (!finalSupplier || !inwardColor || !bagsCount || !weightVal) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -1477,7 +1477,7 @@ export default function App() {
     }));
 
     setBottomSheet(null);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
     // reset form fields
     setInwardSupplier('');
     setInwardNewSupplier('');
@@ -1507,7 +1507,7 @@ export default function App() {
     const weightVal = parseFloat(outwardBagWeight);
 
     if (!finalParty || !outwardColor || !bagsCount || !weightVal) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -1517,7 +1517,7 @@ export default function App() {
     const calculatedTotalKg = bagsCount * weightVal;
 
     if (stockIdx === -1 || updatedStock[stockIdx].bags < bagsCount) {
-      showToast(t('insufficientStock'), 'error');
+      showToast('Insufficient stock', 'error');
       return;
     }
 
@@ -1545,7 +1545,7 @@ export default function App() {
     }));
 
     setBottomSheet(null);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
     setOutwardParty('');
     setOutwardNewParty('');
     setOutwardColor('');
@@ -1570,7 +1570,7 @@ export default function App() {
   const handleAddEmployee = (e) => {
     e.preventDefault();
     if (!empName.trim() || !empPhone.trim() || !empRate.trim()) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -1602,7 +1602,7 @@ export default function App() {
     }));
 
     setBottomSheet(null);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
     // reset variables
     setEmpName('');
     setEmpFather('');
@@ -1643,7 +1643,7 @@ export default function App() {
 
     setDb(prev => ({ ...prev, employees: updatedEmployees }));
     setIsEditingEmployee(false);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const startEditEmployee = (emp) => {
@@ -1672,7 +1672,7 @@ export default function App() {
         setDb(prev => ({ ...prev, employees: remainingEmps }));
         navigateTo('staff');
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('employeeRemoved'));
+        showToast('Employee removed');
       }
     });
   };
@@ -1744,7 +1744,7 @@ export default function App() {
     }));
 
     setBottomSheet(null);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   // Stock Edit bottom sheet handling
@@ -1768,11 +1768,11 @@ export default function App() {
 
     if (isRemove) {
       updatedStock.splice(idx, 1);
-      showToast(t('stockEntryRemoved'));
+      showToast('Stock entry removed');
     } else {
       updatedStock[idx].kg = parseFloat(stockEditKg) || 0;
       updatedStock[idx].bags = parseInt(stockEditBags) || 0;
-      showToast(t('successSave'));
+      showToast('Saved successfully');
     }
 
     setDb(prev => ({ ...prev, stock: updatedStock }));
@@ -1849,7 +1849,7 @@ export default function App() {
         }));
 
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('weeklyPayrollGenerated'));
+        showToast('Weekly payroll generated');
       }
     });
   };
@@ -1872,7 +1872,7 @@ export default function App() {
     setLocalPayrollRates(prev => ({ ...prev, [selectedPayrollEmpId]: parseFloat(editPayrollRate) || 0 }));
     setLocalPayrollAdvances(prev => ({ ...prev, [selectedPayrollEmpId]: parseFloat(editPayrollAdvance) || 0 }));
     setBottomSheet(null);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   // Reports page state
@@ -1889,7 +1889,7 @@ export default function App() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    showToast(t('backupExported'));
+    showToast('Backup exported');
   };
 
   // Custom Chart calculation
@@ -3135,7 +3135,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
   const saveStock = () => {
     if (!stockForm.stockName || !stockForm.color || !stockForm.numBags) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -3167,7 +3167,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
     setDb(prev => ({ ...prev, stock: updatedStock }));
     setShowStockModal(false);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const deleteStock = () => {
@@ -3181,7 +3181,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         addActivity('stockDeleted', { type: 'stock', name: selectedStock.stockName });
         setShowStockModal(false);
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('deleteStock') + ' ' + t('successSave').toLowerCase());
+        showToast('Stock deleted successfully');
       }
     });
   };
@@ -3224,7 +3224,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
   const saveEmployee = () => {
     if (!employeeForm.fullName || !employeeForm.employeeId) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -3262,7 +3262,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
     setDb(prev => ({ ...prev, employees: updatedEmployees }));
     setShowEmployeeModal(false);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const deleteEmployee = () => {
@@ -3276,7 +3276,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         addActivity('employeeDeleted', { type: 'employee', name: selectedEmployee.name });
         setShowEmployeeModal(false);
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('deleteEmployee') + ' ' + t('successSave').toLowerCase());
+        showToast('Employee deleted successfully');
       }
     });
   };
@@ -3311,7 +3311,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
   const saveYarn = () => {
     if (!yarnForm.yarnName || !yarnForm.yarnCode) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -3339,7 +3339,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
     setDb(prev => ({ ...prev, yarn: updatedYarn }));
     setShowYarnModal(false);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const deleteYarn = () => {
@@ -3353,7 +3353,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         addActivity('yarnDeleted', { type: 'yarn', name: selectedYarn.yarnName });
         setShowYarnModal(false);
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('deleteYarn') + ' ' + t('successSave').toLowerCase());
+        showToast('Yarn deleted successfully');
       }
     });
   };
@@ -3377,7 +3377,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
   const saveInward = () => {
     if (!inwardForm.supplier || !inwardForm.color || !inwardForm.bags) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -3395,7 +3395,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
     const updatedInwardList = db.inward.map(item => item.id === inwardForm.id ? updatedInward : item);
     setDb(prev => ({ ...prev, inward: updatedInwardList }));
     setShowInwardModal(false);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const deleteInward = () => {
@@ -3408,7 +3408,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         setDb(prev => ({ ...prev, inward: updatedInward }));
         setShowInwardModal(false);
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('inwardEntryDeleted'));
+        showToast('Inward entry deleted');
       }
     });
   };
@@ -3431,7 +3431,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
   const saveOutward = () => {
     if (!outwardForm.partyName || !outwardForm.color || !outwardForm.bags) {
-      showToast(t('errorFields'), 'error');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -3448,7 +3448,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
     const updatedOutwardList = db.outward.map(item => item.id === outwardForm.id ? updatedOutward : item);
     setDb(prev => ({ ...prev, outward: updatedOutwardList }));
     setShowOutwardModal(false);
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const deleteOutward = () => {
@@ -3461,7 +3461,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         setDb(prev => ({ ...prev, outward: updatedOutward }));
         setShowOutwardModal(false);
         setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast(t('outwardEntryDeleted'));
+        showToast('Outward entry deleted');
       }
     });
   };
@@ -4482,7 +4482,7 @@ function EmployeeProfile({ emp, t, lang, startEditEmployee, removeEmployee, navi
           <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setBottomSheet('attendance')}>
             <i className="ti ti-calendar-user"></i> {t('markAttendance')}
           </button>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast(t('wagesCalculated')); navigateTo('payroll'); }}>
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('Wages calculated'); navigateTo('payroll'); }>
             <i className="ti ti-wallet"></i> {t('paySalary')}
           </button>
         </div>
@@ -4580,7 +4580,7 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
         <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { window.print(); }}>
           <i className="ti ti-printer"></i> Print Statement
         </button>
-        <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast(t('pdfDownloaded')); window.print(); }}>
+        <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('PDF downloaded'); window.print(); }}>
           <i className="ti ti-download"></i> {t('downloadPDF')}
         </button>
       </div>
@@ -4716,7 +4716,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      showToast(t('locationError'), 'error');
+      showToast('Location not available', 'error');
       return;
     }
 
@@ -4725,14 +4725,14 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
         const { latitude, longitude } = position.coords;
         const locationString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
         setFacLocation(locationString);
-        showToast(t('successSave'));
+        showToast('Saved successfully');
       },
       (error) => {
         console.error('Geolocation error:', error);
         if (error.code === 1) {
-          showToast(t('locationPermission'), 'error');
+          showToast('Location permission denied', 'error');
         } else {
-          showToast(t('locationError'), 'error');
+          showToast('Location not available', 'error');
         }
       }
     );
@@ -4751,7 +4751,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
         location: facLocation
       }
     }));
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const handleToggleNotification = (key, currentVal) => {
@@ -4762,7 +4762,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
         [key]: !currentVal
       }
     }));
-    showToast(t('successSave'));
+    showToast('Saved successfully');
   };
 
   const handleLogoUpload = (e) => {
@@ -4777,7 +4777,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
             logo: reader.result
           }
         }));
-        showToast(t('logoUploaded'));
+        showToast('Logo uploaded');
       };
       reader.readAsDataURL(file);
     }
@@ -4791,7 +4791,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
         logo: ""
       }
     }));
-    showToast(t('logoRemoved'));
+    showToast('Logo removed');
   };
 
   const handleLangChange = (selectedLang) => {
@@ -4993,7 +4993,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           {expandedSection === 'data' && (
             <div className="settings-accordion-content">
               <div className="data-actions-list">
-                <div className="data-action-row" onClick={() => { showToast(t('databaseSynced')); }}>
+                <div className="data-action-row" onClick={() => { showToast('Database synced'); }}>
                   <div className="data-action-left">
                     <i className="ti ti-cloud-upload"></i>
                     <div className="data-action-text">
