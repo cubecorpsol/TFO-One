@@ -805,9 +805,22 @@ export default function App() {
   // Local Database State
   const [db, setDb] = useState(() => {
     const local = localStorage.getItem('tfo_db');
+    console.log('App init: Loading from localStorage:', local ? 'found' : 'not found');
     if (local) {
-      try { return JSON.parse(local); } catch (e) { }
+      try {
+        const parsed = JSON.parse(local);
+        console.log('App init: Parsed localStorage data:', {
+          employeesCount: parsed.employees?.length,
+          stockCount: parsed.stock?.length,
+          inwardCount: parsed.inward?.length,
+          outwardCount: parsed.outward?.length
+        });
+        return parsed;
+      } catch (e) {
+        console.error('App init: Error parsing localStorage:', e);
+      }
     }
+    console.log('App init: Using default data');
     return {
       settings: DEFAULT_FACTORY_SETTINGS,
       employees: DEFAULT_EMPLOYEES,
