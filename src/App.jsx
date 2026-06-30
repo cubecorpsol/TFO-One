@@ -969,6 +969,7 @@ export default function App() {
 
   // Local state persistence + Automatic Cloud Sync (Debounced)
   useEffect(() => {
+    console.log('useEffect triggered - saving to localStorage');
     localStorage.setItem('tfo_db', JSON.stringify(db));
     console.log('localStorage saved. Current db state:', {
       employeesCount: db.employees?.length,
@@ -976,6 +977,7 @@ export default function App() {
       inwardCount: db.inward?.length,
       outwardCount: db.outward?.length
     });
+    console.log('localStorage verification:', localStorage.getItem('tfo_db')?.substring(0, 100));
 
     if (!isSupabaseConfigured() || !session) {
       if (!isSupabaseConfigured() && session) {
