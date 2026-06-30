@@ -964,7 +964,7 @@ export default function App() {
         console.log('Setting merged DB:', mergedDb);
         setDb(mergedDb);
         setCloudStatus('synced');
-        showToast(t('dataLoadedFromCloud'));
+        showToast('Data loaded from cloud');
         navigateTo('home');
       } else {
         console.log('No cloud data found, checking localStorage');
@@ -1284,15 +1284,14 @@ export default function App() {
     setScreen(target);
   };
 
-  // Onboarding next page transitions
+  // Onboarding next page transitions (4 steps: owner name, TFO name, mobile, location)
   const handleOnboardingNext = () => {
     if (onboardingStep === 1 && !obName.trim()) { showToast(t('errorFields'), 'error'); return; }
     if (onboardingStep === 2 && !obFactory.trim()) { showToast(t('errorFields'), 'error'); return; }
-    if (onboardingStep === 3 && (!obMobile.trim() || !obWhatsapp.trim())) { showToast(t('errorFields'), 'error'); return; }
-    if (onboardingStep === 4 && !obEmpCount.trim()) { showToast(t('errorFields'), 'error'); return; }
-    if (onboardingStep === 5 && !obAddress.trim()) { showToast(t('errorFields'), 'error'); return; }
+    if (onboardingStep === 3 && !obMobile.trim()) { showToast(t('errorFields'), 'error'); return; }
+    if (onboardingStep === 4 && !obAddress.trim()) { showToast(t('errorFields'), 'error'); return; }
 
-    if (onboardingStep < 5) {
+    if (onboardingStep < 4) {
       setOnboardingStep(prev => prev + 1);
     } else {
       // Completed, save factory settings & setup
@@ -1303,8 +1302,7 @@ export default function App() {
           ownerName: obName,
           factoryName: obFactory,
           phone: obMobile,
-          whatsapp: obWhatsapp,
-          employeesCount: obEmpCount,
+          whatsapp: obMobile,
           address: obAddress,
           email: session?.user?.email || db.settings.email || ''
         }
@@ -2018,7 +2016,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
           </div>
         )}
 
-        {/* 2. ONBOARDING SCREEN FLOW */}
+        {/* 2. ONBOARDING SCREEN FLOW — 4 steps for new users */}
         {screen === 'onboarding' && (
           <div className="onboarding-wrapper">
             <div className="onboarding-header">
@@ -2026,63 +2024,95 @@ create policy "Users can insert own factory data." on public.factory_data for in
                 <i className="ti ti-arrow-left"></i>
               </button>
               <div className="progress-container">
-                <p className="progress-text">{t('week')} {onboardingStep} / 5</p>
+                <p className="progress-text">Step {onboardingStep} / 4</p>
                 <div className="progress-bar-bg">
-                  <div className="progress-bar-fill" style={{ width: `${onboardingStep * 20}%` }}></div>
+                  <div className="progress-bar-fill" style={{ width: `${onboardingStep * 25}%` }}></div>
                 </div>
               </div>
             </div>
 
             <div className="onboarding-body">
+              {/* Step 1 — Owner Name */}
               {onboardingStep === 1 && (
                 <>
+                  <div className="ob-step-icon"><i className="ti ti-user-circle"></i></div>
                   <h2 className="question-title">{t('ownerName')}</h2>
-                  <input type="text" className="large-input" value={obName} onChange={(e) => setObName(e.target.value)} placeholder={t('egGunaSundaram')} autoFocus />
+                  <p className="ob-step-hint">Your full name as the factory owner</p>
+                  <input
+                    type="text"
+                    className="large-input"
+                    value={obName}
+                    onChange={(e) => setObName(e.target.value)}
+                    placeholder={t('egGunaSundaram')}
+                    autoFocus
+                  />
                 </>
               )}
 
+              {/* Step 2 — TFO One Name */}
               {onboardingStep === 2 && (
                 <>
+                  <div className="ob-step-icon"><i className="ti ti-building-factory"></i></div>
                   <h2 className="question-title">{t('factoryName')}</h2>
-                  <input type="text" className="large-input" value={obFactory} onChange={(e) => setObFactory(e.target.value)} placeholder={t('egKonguTfoMills')} autoFocus />
+                  <p className="ob-step-hint">Your TFO / factory business name</p>
+                  <input
+                    type="text"
+                    className="large-input"
+                    value={obFactory}
+                    onChange={(e) => setObFactory(e.target.value)}
+                    placeholder={t('egKonguTfoMills')}
+                    autoFocus
+                  />
                 </>
               )}
 
+              {/* Step 3 — Mobile Number */}
               {onboardingStep === 3 && (
                 <>
+                  <div className="ob-step-icon"><i className="ti ti-device-mobile"></i></div>
                   <h2 className="question-title">{t('mobileNumber')}</h2>
-                  <input type="tel" className="large-input" value={obMobile} onChange={(e) => setObMobile(e.target.value)} placeholder="98432XXXXX" maxLength="10" autoFocus />
-
-                  <h2 className="question-title" style={{ marginTop: '16px' }}>{t('whatsappNumber')}</h2>
-                  <input type="tel" className="large-input" value={obWhatsapp} onChange={(e) => setObWhatsapp(e.target.value)} placeholder="98432XXXXX" maxLength="10" />
+                  <p className="ob-step-hint">10-digit mobile number (India)</p>
+                  <input
+                    type="tel"
+                    className="large-input"
+                    value={obMobile}
+                    onChange={(e) => setObMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="98432XXXXX"
+                    maxLength="10"
+                    autoFocus
+                  />
                 </>
               )}
 
+              {/* Step 4 — Location / Address */}
               {onboardingStep === 4 && (
                 <>
-                  <h2 className="question-title">{t('employeeCount')}</h2>
-                  <input type="number" className="large-input" value={obEmpCount} onChange={(e) => setObEmpCount(e.target.value)} placeholder={t('eg15')} autoFocus />
-                </>
-              )}
-
-              {onboardingStep === 5 && (
-                <>
+                  <div className="ob-step-icon"><i className="ti ti-map-pin"></i></div>
                   <h2 className="question-title">{t('factoryAddress')}</h2>
-                  <textarea className="large-input" style={{ fontSize: '16px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px' }} value={obAddress} onChange={(e) => setObAddress(e.target.value)} placeholder={t('addressPlaceholder')} rows="3" autoFocus></textarea>
+                  <p className="ob-step-hint">City, State, Pincode of your factory</p>
+                  <textarea
+                    className="large-input"
+                    style={{ fontSize: '16px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                    value={obAddress}
+                    onChange={(e) => setObAddress(e.target.value)}
+                    placeholder={t('addressPlaceholder')}
+                    rows="3"
+                    autoFocus
+                  ></textarea>
 
                   <div className="card onboarding-summary mt-16">
                     <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>{t('onboardingSummary')}</h3>
                     <div className="summary-row"><span className="summary-label">{t('ownerName')}:</span><span className="summary-value">{obName}</span></div>
                     <div className="summary-row"><span className="summary-label">{t('factoryName')}:</span><span className="summary-value">{obFactory}</span></div>
                     <div className="summary-row"><span className="summary-label">{t('mobileNumber')}:</span><span className="summary-value">+91 {obMobile}</span></div>
-                    <div className="summary-row"><span className="summary-label">{t('employeeCount')}:</span><span className="summary-value">{obEmpCount}</span></div>
+                    <div className="summary-row"><span className="summary-label">{t('factoryAddress')}:</span><span className="summary-value">{obAddress}</span></div>
                   </div>
                 </>
               )}
             </div>
 
             <button className="btn btn-primary mt-16" onClick={handleOnboardingNext}>
-              {onboardingStep === 5 ? t('finish') : t('next') + " →"}
+              {onboardingStep === 4 ? t('finish') : t('next') + " →"}
             </button>
           </div>
         )}
@@ -2229,6 +2259,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
             setDb={setDb}
             showToast={showToast}
             setConfirmModal={setConfirmModal}
+            addActivity={addActivity}
           />
         )}
 
@@ -2795,7 +2826,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
 // ==========================================
 // COMPONENT: STOCK INVENTORY SUBPAGE
 // ==========================================
-function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, totalStockBags, setDb, showToast, setConfirmModal }) {
+function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, totalStockBags, setDb, showToast, setConfirmModal, addActivity }) {
   const [activeTab, setActiveTab] = useState('stock'); // stock, employees, yarn, inward, outward
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, stocks, employees, yarn

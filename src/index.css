@@ -1979,3 +1979,31 @@ input:checked + .slider:before {
     margin-bottom: 20px;
   }
 }
+
+/* ==========================================
+   ONBOARDING STEP ENHANCEMENTS
+   ========================================== */
+.ob-step-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-terracotta), #2d4a9e);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+  box-shadow: 0 4px 16px rgba(27, 43, 107, 0.25);
+}
+
+.ob-step-icon i {
+  font-size: 28px;
+  color: #fff;
+}
+
+.ob-step-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  margin: -8px 0 16px 0;
+  line-height: 1.5;
+}
