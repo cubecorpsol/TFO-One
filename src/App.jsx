@@ -885,7 +885,7 @@ export default function App() {
 
   const loadDataFromCloud = async (userId, userEmail) => {
     console.log('Loading data from cloud for user:', userId);
-    showToast('Loading data from cloud...', 'info');
+    console.log('Current localStorage data:', localStorage.getItem('tfo_db'));
     setIsSyncing(true);
     setCloudStatus('syncing');
     
@@ -915,9 +915,35 @@ export default function App() {
         showToast(t('dataLoadedFromCloud'));
         navigateTo('home');
       } else {
-        console.log('No cloud data found, keeping localStorage data');
+        console.log('No cloud data found, checking localStorage');
+        // Check if localStorage has meaningful data
+        const localData = localStorage.getItem('tfo_db');
+        if (localData) {
+          try {
+            const parsed = JSON.parse(localData);
+            const hasRealData = parsed && (
+              parsed.employees?.length > 0 ||
+              parsed.stock?.length > 0 ||
+              parsed.inward?.length > 0 ||
+              parsed.outward?.length > 0 ||
+              (parsed.settings?.ownerName && parsed.settings.ownerName !== "Guna S") ||
+              (parsed.settings?.factoryName && parsed.settings.factoryName !== "Guna's TFO Mills")
+            );
+            console.log('Has real data in localStorage:', hasRealData);
+            if (hasRealData) {
+              console.log('Using localStorage data, going to home');
+              setCloudStatus('synced');
+              navigateTo('home');
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing localStorage:', e);
+          }
+        }
+        console.log('No meaningful data found, going to onboarding');
         setCloudStatus('synced');
-        navigateTo('home');
+        navigateTo('onboarding');
+        setOnboardingStep(1);
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
