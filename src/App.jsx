@@ -1670,8 +1670,8 @@ export default function App() {
   const removeEmployee = () => {
     setConfirmModal({
       visible: true,
-      title: t('removeEmployeeQuestion'),
-      message: t('confirmDelete'),
+      title: 'Remove Employee',
+      message: 'Are you sure you want to delete this employee?',
       action: () => {
         const remainingEmps = db.employees.filter(emp => emp.id !== activeEmployeeId);
         setDb(prev => ({ ...prev, employees: remainingEmps }));
@@ -1761,7 +1761,7 @@ export default function App() {
     setSelectedStockColor(colorObj.color);
     setStockEditKg(colorObj.kg.toString());
     setStockEditBags(colorObj.bags.toString());
-    setStockEditReason(t('stockAudit'));
+    setStockEditReason('Stock audit');
     setBottomSheet('edit_stock');
   };
 
@@ -1813,8 +1813,8 @@ export default function App() {
   const handleStartPayroll = () => {
     setConfirmModal({
       visible: true,
-      title: t('startPayroll'),
-      message: t('confirmPayroll').replace('{week}', getWeekNumber().toString()),
+      title: 'Start Weekly Payroll',
+      message: 'Generate payroll for week ' + getWeekNumber().toString() + '?',
       action: () => {
         // Compile Payroll records into database
         const breakdown = db.employees.map(emp => {
@@ -2667,11 +2667,11 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             <div className="form-row">
               <div className="form-group">
-                <label>{t('fatherName')}</label>
+                <label>Father Name</label>
                 <input type="text" value={empFather} onChange={(e) => setEmpFather(e.target.value)} />
               </div>
               <div className="form-group">
-                <label>{t('motherName')}</label>
+                <label>Mother Name</label>
                 <input type="text" value={empMother} onChange={(e) => setEmpMother(e.target.value)} />
               </div>
             </div>
@@ -4477,18 +4477,18 @@ function EmployeeProfile({ emp, t, lang, startEditEmployee, removeEmployee, navi
 
         {/* Family info */}
         <div className="card text-left">
-          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>{t('familyInfo')}</h3>
-          <div className="profile-info-row"><span className="summary-label">{t('fatherName')}</span><span className="summary-value">{emp.fatherName || "Ramasamy"}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{t('motherName')}</span><span className="summary-value">{emp.motherName || "Palaniammal"}</span></div>
+          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>Family Info</h3>
+          <div className="profile-info-row"><span className="summary-label">Father Name</span><span className="summary-value">{emp.fatherName || "Ramasamy"}</span></div>
+          <div className="profile-info-row"><span className="summary-label">Mother Name</span><span className="summary-value">{emp.motherName || "Palaniammal"}</span></div>
         </div>
 
         {/* Mark Roll CTA */}
         <div style={{ display: 'flex', gap: '12px' }}>
           <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setBottomSheet('attendance')}>
-            <i className="ti ti-calendar-user"></i> {t('markAttendance')}
+            <i className="ti ti-calendar-user"></i> Mark Attendance
           </button>
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('Wages calculated'); navigateTo('payroll'); }>
-            <i className="ti ti-wallet"></i> {t('paySalary')}
+            <i className="ti ti-wallet"></i> Pay Salary
           </button>
         </div>
 
@@ -4801,7 +4801,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
 
   const handleLangChange = (selectedLang) => {
     setLang(selectedLang);
-    showToast(selectedLang === 'en' ? t('languageChanged') : t('languageChangedTamil'));
+    showToast(selectedLang === 'en' ? 'Language changed to English' : 'மொழி மாற்றப்பட்டது');
   };
 
   // Location string helper
