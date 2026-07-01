@@ -156,7 +156,7 @@ const translations = {
     purchaseDate: "Purchase Date",
     stockNotes: "Notes",
     saveStock: "Stock",
-    deleteStock: "Stock",
+    deleteStock: "Delete",
     confirmDeleteStock: "Are you sure you want to delete this stock?",
     viewDetails: "View Details",
     employeesTab: "Employees",
