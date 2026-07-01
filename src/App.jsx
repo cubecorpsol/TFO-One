@@ -4487,7 +4487,7 @@ function EmployeeProfile({ emp, t, lang, startEditEmployee, removeEmployee, navi
           <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setBottomSheet('attendance')}>
             <i className="ti ti-calendar-user"></i> Mark Attendance
           </button>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('Wages calculated'); navigateTo('payroll'); }}
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('Wages calculated'); navigateTo('payroll'); }}>
             <i className="ti ti-wallet"></i> Pay Salary
           </button>
         </div>
