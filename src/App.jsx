@@ -36,7 +36,7 @@ const translations = {
     whatsappNumber: "WhatsApp number",
     employeeCount: "Number of employees",
     factoryAddress: "Factory address (City, State, Pincode)",
-    addressPlaceholder: "e.g. Palladam, Tamil Nadu, 641664",
+    addressPlaceholder: "e.g. Chennimalai, Tamil Nadu, 638051",
     onboardingSummary: "Review your information",
     synced: "Synced",
     offline: "Offline",
@@ -265,8 +265,8 @@ const translations = {
     runWeeklyLedger: "Run Weekly Ledger",
     compileActiveRecords: "Compile active records of employees to run this week's statements.",
     twelveDigitAadhaar: "12-digit Aadhaar",
-    egGunaSundaram: "e.g. Guna Sundaram",
-    egKonguTfoMills: "e.g. Kongu TFO Mills",
+    egGunaSundaram: "e.g. GunaSekaran",
+    egKonguTfoMills: "e.g. Guna TFO Mills",
     eg15: "e.g. 15",
     egRoyalBlue: "e.g. Royal Blue",
     egAnandhaSelvam: "e.g. Anandha Selvam",
@@ -593,8 +593,8 @@ const DEFAULT_FACTORY_SETTINGS = {
   phone: "9843210987",
   whatsapp: "9843210987",
   employeesCount: "4",
-  address: "124, Trichy Road, Palladam",
-  pincode: "641664",
+  address: "124, PVR Road, Chennimalai",
+  pincode: "638051",
   logo: ""
 };
 
@@ -612,7 +612,7 @@ const DEFAULT_EMPLOYEES = [
     shift: "Morning", // Morning/Night
     rate: 120, // Rate per bag
     joiningDate: "2024-01-10",
-    address: "12, Main Street, Palladam",
+    address: "12, Main Street, chennimalai",
     status: "present",
     photoUrl: ""
   },
@@ -793,11 +793,13 @@ export default function App() {
   const [screen, setScreen] = useState(isSupabaseConfigured() ? 'loading' : 'auth'); // loading, auth, onboarding, home, stock, staff, payroll, reports, settings, employee_profile
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
 
   // Supabase Integration States
   const [session, setSession] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [cloudStatus, setCloudStatus] = useState('local'); // 'local', 'synced', 'syncing', 'error', 'offline'
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [isSignUpView, setIsSignUpView] = useState(false);
@@ -888,6 +890,7 @@ export default function App() {
     if (!isSupabaseConfigured()) {
       setCloudStatus('local');
       // No Supabase — stay on auth screen (already set as initial state)
+      setIsInitialLoadComplete(true);
       return;
     }
 
@@ -896,6 +899,7 @@ export default function App() {
       console.warn('Auth check timed out, showing auth screen');
       setScreen('auth');
       setCloudStatus('offline');
+      setIsInitialLoadComplete(true);
     }, 6000);
 
     // Get initial session
@@ -908,11 +912,13 @@ export default function App() {
       } else {
         setCloudStatus('offline');
         setScreen('auth');
+        setIsInitialLoadComplete(true);
       }
     }).catch(() => {
       clearTimeout(authTimeout);
       setCloudStatus('offline');
       setScreen('auth');
+      setIsInitialLoadComplete(true);
     });
 
     // Listen to auth state changes (OAuth redirect, sign-out, token refresh)
@@ -920,11 +926,14 @@ export default function App() {
       console.log('Auth state changed:', _event);
       setSession(session);
       if (session) {
-        setCloudStatus('syncing');
-        loadDataFromCloud(session.user.id, session.user.email);
+        if (_event === 'INITIAL_SESSION' || _event === 'SIGNED_IN') {
+          setCloudStatus('syncing');
+          loadDataFromCloud(session.user.id, session.user.email);
+        }
       } else {
         setCloudStatus('offline');
         setScreen('auth');
+        setIsInitialLoadComplete(true);
       }
     });
 
@@ -962,10 +971,12 @@ export default function App() {
         setCloudStatus('synced');
         // If the user completed onboarding before → home; else → onboarding
         if (data.settings?.onboardingComplete) {
-          navigateTo('home');
+          setScreen(prev => (prev === 'loading' || prev === 'auth' ? 'home' : prev));
+          setBottomSheet(null);
         } else {
           console.log('Cloud user has not completed onboarding, going to onboarding');
-          navigateTo('onboarding');
+          setScreen(prev => (prev === 'loading' || prev === 'auth' ? 'onboarding' : prev));
+          setBottomSheet(null);
           setOnboardingStep(1);
         }
       } else {
@@ -985,7 +996,8 @@ export default function App() {
         setCloudStatus('synced');
         if (completedLocally) {
           console.log('Onboarding completed locally, going to home');
-          navigateTo('home');
+          setScreen(prev => (prev === 'loading' || prev === 'auth' ? 'home' : prev));
+          setBottomSheet(null);
         } else {
           // Brand-new user — wipe default mock data and start completely fresh
           console.log('New user — clearing mock data and going to onboarding');
@@ -1023,6 +1035,7 @@ export default function App() {
       navigateTo('home');
     } finally {
       setIsSyncing(false);
+      setIsInitialLoadComplete(true);
     }
   };
 
@@ -1038,7 +1051,10 @@ export default function App() {
   };
 
   // Local state persistence + Automatic Cloud Sync (Debounced)
-  useEffect(() => {
+  useEffect(() => {if (!isInitialLoadComplete) {
+        console.log("Waiting for cloud data...");
+        return;
+    }
     console.log('useEffect triggered - saving to IndexedDB and localStorage');
     const dbString = JSON.stringify(db);
     
@@ -1091,10 +1107,10 @@ export default function App() {
         setCloudStatus('offline');
         showToast('Failed to connect to cloud: ' + (err.message || 'Unknown error'), 'error');
       }
-    }, 2000); // Debounce sync by 2 seconds
+    }, 300); // Debounce sync by 300ms
 
     return () => clearTimeout(delayDebounceFn);
-  }, [db, session]);
+  }, [db, session, isInitialLoadComplete]);
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
@@ -1355,6 +1371,13 @@ export default function App() {
     }
   };
 
+  const handleOnboardingKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleOnboardingNext();
+    }
+  };
+
   // Onboarding previous page transition
   const handleOnboardingBack = () => {
     if (onboardingStep > 1) {
@@ -1464,7 +1487,7 @@ export default function App() {
 
     // Update Stock List color-wise
     let updatedStock = [...db.stock];
-    const stockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === inwardColor.toLowerCase());
+    const stockIdx = updatedStock.findIndex(item => (item.color || '').toLowerCase() === (inwardColor || '').toLowerCase());
     if (stockIdx > -1) {
       updatedStock[stockIdx].kg += calculatedTotalKg;
       updatedStock[stockIdx].bags += bagsCount;
@@ -1991,8 +2014,8 @@ export default function App() {
                 {lang === 'en' ? 'த' : 'EN'}
               </span>
               <img src={logo} alt="TFO One" className="auth-logo-image" />
-              <h1 className="auth-tagline">{t('tagline')}</h1>
-              <p className="auth-subtitle">{t('subtitle')}</p>
+              <h1 className="auth-tagline">Factory Management Made Simple</h1>
+              <p className="auth-subtitle">Track stock, employees, and production in one place</p>
             </div>
 
             {dbError === 'table_missing' && (
@@ -2037,7 +2060,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
             )}
 
             <div className="card auth-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '800', textAlign: 'center', marginBottom: '8px' }}>{t('signInToContinue')}</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: '800', textAlign: 'center', marginBottom: '8px' }}>Sign in to continue</h2>
 
               <button className="btn google-btn" onClick={handleGoogleSignIn} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
@@ -2046,12 +2069,12 @@ create policy "Users can insert own factory data." on public.factory_data for in
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                {t('continueWithGoogle')}
+                Continue with Google
               </button>
             </div>
 
             <p className="auth-subtitle" style={{ fontSize: '12px', textAlign: 'center', marginTop: '24px' }}>
-              {t('freeToUse')}
+              Free to use • No credit card required
             </p>
           </div>
         )}
@@ -2076,14 +2099,15 @@ create policy "Users can insert own factory data." on public.factory_data for in
               {onboardingStep === 1 && (
                 <>
                   <div className="ob-step-icon"><i className="ti ti-user-circle"></i></div>
-                  <h2 className="question-title">{t('ownerName')}</h2>
+                  <h2 className="question-title">Owner Name</h2>
                   <p className="ob-step-hint">Your full name as the factory owner</p>
                   <input
                     type="text"
                     className="large-input"
                     value={obName}
                     onChange={(e) => setObName(e.target.value)}
-                    placeholder={t('egGunaSundaram')}
+                    onKeyDown={handleOnboardingKeyDown}
+                    placeholder="e.g. GunaSekaran"
                     autoFocus
                   />
                 </>
@@ -2093,14 +2117,15 @@ create policy "Users can insert own factory data." on public.factory_data for in
               {onboardingStep === 2 && (
                 <>
                   <div className="ob-step-icon"><i className="ti ti-building-factory"></i></div>
-                  <h2 className="question-title">{t('factoryName')}</h2>
+                  <h2 className="question-title">Factory / TFO Name</h2>
                   <p className="ob-step-hint">Your TFO / factory business name</p>
                   <input
                     type="text"
                     className="large-input"
                     value={obFactory}
                     onChange={(e) => setObFactory(e.target.value)}
-                    placeholder={t('egKonguTfoMills')}
+                    onKeyDown={handleOnboardingKeyDown}
+                    placeholder="e.g. Guna TFO Mills"
                     autoFocus
                   />
                 </>
@@ -2110,13 +2135,14 @@ create policy "Users can insert own factory data." on public.factory_data for in
               {onboardingStep === 3 && (
                 <>
                   <div className="ob-step-icon"><i className="ti ti-device-mobile"></i></div>
-                  <h2 className="question-title">{t('mobileNumber')}</h2>
+                  <h2 className="question-title">Mobile Number</h2>
                   <p className="ob-step-hint">10-digit mobile number (India)</p>
                   <input
                     type="tel"
                     className="large-input"
                     value={obMobile}
                     onChange={(e) => setObMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onKeyDown={handleOnboardingKeyDown}
                     placeholder="98432XXXXX"
                     maxLength="10"
                     autoFocus
@@ -2128,31 +2154,32 @@ create policy "Users can insert own factory data." on public.factory_data for in
               {onboardingStep === 4 && (
                 <>
                   <div className="ob-step-icon"><i className="ti ti-map-pin"></i></div>
-                  <h2 className="question-title">{t('factoryAddress')}</h2>
+                  <h2 className="question-title">Factory Address</h2>
                   <p className="ob-step-hint">City, State, Pincode of your factory</p>
                   <textarea
                     className="large-input"
                     style={{ fontSize: '16px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px' }}
                     value={obAddress}
                     onChange={(e) => setObAddress(e.target.value)}
-                    placeholder={t('addressPlaceholder')}
+                    onKeyDown={handleOnboardingKeyDown}
+                    placeholder="e.g. Chennimalai, Tamil Nadu, 638051"
                     rows="3"
                     autoFocus
                   ></textarea>
 
                   <div className="card onboarding-summary mt-16">
-                    <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>{t('onboardingSummary')}</h3>
-                    <div className="summary-row"><span className="summary-label">{t('ownerName')}:</span><span className="summary-value">{obName}</span></div>
-                    <div className="summary-row"><span className="summary-label">{t('factoryName')}:</span><span className="summary-value">{obFactory}</span></div>
-                    <div className="summary-row"><span className="summary-label">{t('mobileNumber')}:</span><span className="summary-value">+91 {obMobile}</span></div>
-                    <div className="summary-row"><span className="summary-label">{t('factoryAddress')}:</span><span className="summary-value">{obAddress}</span></div>
+                    <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>Review your information</h3>
+                    <div className="summary-row"><span className="summary-label">Owner Name:</span><span className="summary-value">{obName}</span></div>
+                    <div className="summary-row"><span className="summary-label">Factory Name:</span><span className="summary-value">{obFactory}</span></div>
+                    <div className="summary-row"><span className="summary-label">Mobile Number:</span><span className="summary-value">+91 {obMobile}</span></div>
+                    <div className="summary-row"><span className="summary-label">Factory Address:</span><span className="summary-value">{obAddress}</span></div>
                   </div>
                 </>
               )}
             </div>
 
             <button className="btn btn-primary mt-16" onClick={handleOnboardingNext}>
-              {onboardingStep === 4 ? t('finish') : t('next') + " →"}
+              {onboardingStep === 4 ? 'Finish' : 'Next →'}
             </button>
           </div>
         )}
@@ -2162,30 +2189,30 @@ create policy "Users can insert own factory data." on public.factory_data for in
           <>
             <div className="text-left">
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '700' }}>
-                {getFormattedDate()} | {t('week')} {getWeekNumber()}
+                {getFormattedDate()} | Week {getWeekNumber()}
               </p>
-              <h1 style={{ fontSize: '24px', margin: '4px 0 0 0' }}>{t('welcome')}</h1>
+              <h1 style={{ fontSize: '24px', margin: '4px 0 0 0' }}>Welcome</h1>
             </div>
 
             {/* Stats 2x2 Grid */}
             <div className="grid-2x2">
               <div className="card stat-card" onClick={() => navigateTo('stock')}>
-                <span className="stat-label">{t('totalStock')}</span>
+                <span className="stat-label">Total Stock</span>
                 <span className="stat-value">{totalStockKg.toFixed(1)} <span style={{ fontSize: '13px' }}>KG</span></span>
                 <span className="stat-delta delta-up">{totalStockBags} Bags</span>
               </div>
               <div className="card stat-card" onClick={() => navigateTo('staff')}>
-                <span className="stat-label">{t('employees')}</span>
+                <span className="stat-label">Employees</span>
                 <span className="stat-value">{totalStaffCount}</span>
-                <span className="stat-delta delta-up">{activeStaffToday} {t('activeToday')}</span>
+                <span className="stat-delta delta-up">{activeStaffToday} Active Today</span>
               </div>
               <div className="card stat-card" onClick={() => navigateTo('payroll')}>
-                <span className="stat-label">{t('weeklyPay')}</span>
+                <span className="stat-label">Weekly Pay</span>
                 <span className="stat-value">₹{weeklyWagesSum}</span>
                 <span className="stat-delta delta-down">{db.employees.filter(emp => emp.status === 'absent').length} Absent</span>
               </div>
               <div className="card stat-card" onClick={() => navigateTo('stock')}>
-                <span className="stat-label">{t('production')}</span>
+                <span className="stat-label">Production</span>
                 <span className="stat-value">{productionTodayKg.toFixed(1)} <span style={{ fontSize: '13px' }}>KG</span></span>
                 <span className="stat-delta delta-up">Today</span>
               </div>
@@ -2193,24 +2220,24 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             {/* Quick Actions 2x2 */}
             <div className="grid-2x2">
-              <div className="action-card" onClick={() => setBottomSheet('inward')}>
+              <div className="action-card" onClick={() => setBottomSheeInward}>
                 <div className="action-icon"><i className="ti ti-package-import"></i></div>
-                <span className="action-title">{t('yarnInward')}</span>
+                <span className="action-title">Yarn Inward</span>
                 <span className="action-subtitle">Add Inward</span>
               </div>
-              <div className="action-card" onClick={() => setBottomSheet('outward')}>
+              <div className="action-card" onClick={() => setBottomSheeOutward}>
                 <div className="action-icon"><i className="ti ti-package-export"></i></div>
-                <span className="action-title">{t('yarnOutward')}</span>
+                <span className="action-title">Yarn Outward</span>
                 <span className="action-subtitle">Add Outward</span>
               </div>
               <div className="action-card" onClick={() => setBottomSheet('attendance')}>
                 <div className="action-icon"><i className="ti ti-calendar-user"></i></div>
-                <span className="action-title">{t('attendance')}</span>
+                <span className="action-title">Attendance</span>
                 <span className="action-subtitle">Mark daily roll</span>
               </div>
               <div className="action-card" onClick={() => navigateTo('payroll')}>
                 <div className="action-icon"><i className="ti ti-wallet"></i></div>
-                <span className="action-title">{t('payroll')}</span>
+                <span className="action-title">Payroll</span>
                 <span className="action-subtitle">Calculate wages</span>
               </div>
             </div>
@@ -2219,7 +2246,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
             <div className="card">
               <div className="chart-container">
                 <div className="chart-header">
-                  <h3 style={{ fontSize: '15px' }}>{t('weeklyProdChart')}</h3>
+                  <h3 style={{ fontSize: '15px' }}>Weekly Production Chart</h3>
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>Today: {weeklyProdValues[todayDayIndex]} KG</span>
                 </div>
                 <div className="chart-bars">
@@ -2244,7 +2271,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             {/* Recent Activity feed */}
             <div className="card">
-              <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>{t('recentActivity')}</h3>
+              <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>Recent Activity</h3>
               <div className="activity-feed">
                 {db.activity.map((item, idx) => {
                   let icon = "ti ti-info-circle";
@@ -2257,12 +2284,12 @@ create policy "Users can insert own factory data." on public.factory_data for in
                   let activityText = item.text;
                   if (item.data) {
                     if (item.type === 'inward') {
-                      activityText = `${t('received')} ${item.data.bags} ${t('bags')} ${item.data.color} ${t('from')} ${item.data.supplier}`;
+                      activityText = `Received ${item.data.bags} bags ${item.data.color} from ${item.data.supplier}`;
                     } else if (item.type === 'outward') {
-                      activityText = `${t('dispatched')} ${item.data.bags} ${t('bags')} ${item.data.color} ${t('to')} ${item.data.party}`;
+                      activityText = `Dispatched ${item.data.bags} bags ${item.data.color} to ${item.data.party}`;
                     } else if (item.data.type) {
-                      const actionText = item.type.includes('Added') ? t('added') : item.type.includes('Updated') ? t('updated') : t('deleted');
-                      activityText = `${t(item.data.type)} ${actionText}: ${item.data.name}`;
+                      const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
+                      activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
                     }
                   }
 
@@ -2394,23 +2421,23 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <nav className="app-bottom-nav">
           <button className={`nav-tab ${screen === 'home' ? 'active' : ''}`} onClick={() => navigateTo('home')}>
             <i className="ti ti-home-2"></i>
-            <span>{t('home')}</span>
+            <span>Home</span>
           </button>
           <button className={`nav-tab ${screen === 'stock' ? 'active' : ''}`} onClick={() => navigateTo('stock')}>
             <i className="ti ti-package"></i>
-            <span>{t('stock')}</span>
+            <span>Stock</span>
           </button>
           <button className={`nav-tab ${screen === 'staff' || screen === 'employee_profile' ? 'active' : ''}`} onClick={() => navigateTo('staff')}>
             <i className="ti ti-users"></i>
-            <span>{t('staff')}</span>
+            <span>Staff</span>
           </button>
           <button className={`nav-tab ${screen === 'payroll' ? 'active' : ''}`} onClick={() => navigateTo('payroll')}>
             <i className="ti ti-currency-rupee"></i>
-            <span>{t('payroll')}</span>
+            <span>Payroll</span>
           </button>
           <button className={`nav-tab ${screen === 'reports' ? 'active' : ''}`} onClick={() => navigateTo('reports')}>
             <i className="ti ti-chart-bar"></i>
-            <span>{t('reports')}</span>
+            <span>Reports</span>
           </button>
         </nav>
       )}
@@ -2424,17 +2451,17 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">{t('yarnInward')}</span>
+            <span className="bottom-sheet-title">Yarn Inward</span>
             <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setBottomSheet(null)}><i className="ti ti-plus"></i></button>
           </div>
           <form onSubmit={saveInwardEntry} className="text-left">
             <div className="form-group">
-              <label>{t('inward')} Date</label>
+              <label>Inward Date</label>
               <input type="date" value={inwardDate} onChange={(e) => setInwardDate(e.target.value)} required />
             </div>
 
             <div className="form-group">
-              <label>{t('supplier')}</label>
+              <label>Supplier</label>
               {!showNewSupplierInput ? (
                 <select value={inwardSupplier} onChange={(e) => {
                   if (e.target.value === 'ADD_NEW') {
@@ -2443,50 +2470,50 @@ create policy "Users can insert own factory data." on public.factory_data for in
                     setInwardSupplier(e.target.value);
                   }
                 }} required>
-                  <option value="">{t('selectSupplier')}</option>
+                  <option value="">Select supplier</option>
                   {Array.from(new Set(db.inward.map(item => item.supplier).filter(Boolean))).map(supplier => (
                     <option value={supplier} key={supplier}>{supplier}</option>
                   ))}
-                  <option value="ADD_NEW">{t('addNewSupplier')}</option>
+                  <option value="ADD_NEW">Add new supplier</option>
                 </select>
               ) : (
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="text" placeholder={t('newSupplierName')} value={inwardNewSupplier} onChange={(e) => setInwardNewSupplier(e.target.value)} required />
-                  <button type="button" className="btn btn-secondary" style={{ minWidth: '80px' }} onClick={() => setShowNewSupplierInput(false)}>{t('cancel')}</button>
+                  <input type="text" placeholder="New supplier name" value={inwardNewSupplier} onChange={(e) => setInwardNewSupplier(e.target.value)} required />
+                  <button type="button" className="btn btn-secondary" style={{ minWidth: '80px' }} onClick={() => setShowNewSupplierInput(false)}>Cancel</button>
                 </div>
               )}
             </div>
 
             <div className="form-group">
-              <label>{t('color')}</label>
-              <input type="text" value={inwardColor} onChange={(e) => setInwardColor(e.target.value)} placeholder={t('egRoyalBlue')} required />
+              <label>Color</label>
+              <input type="text" value={inwardColor} onChange={(e) => setInwardColor(e.target.value)} placeholder="e.g. Royal Blue" required />
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>{t('bags')}</label>
-                <input type="number" value={inwardBags} onChange={(e) => setInwardBags(e.target.value)} placeholder={t('bagsCount')} required />
+                <label>Bags</label>
+                <input type="number" value={inwardBags} onChange={(e) => setInwardBags(e.target.value)} placeholder="e.g. 15" required />
               </div>
               <div className="form-group">
-                <label>{t('bagWeight')}</label>
-                <input type="number" step="0.001" value={inwardBagWeight} onChange={(e) => setInwardBagWeight(e.target.value)} placeholder={t('bagWeightPlaceholder')} required />
+                <label>Bag Weight (KG)</label>
+                <input type="number" step="0.001" value={inwardBagWeight} onChange={(e) => setInwardBagWeight(e.target.value)} placeholder="e.g. 50" required />
               </div>
             </div>
 
             <div className="form-group">
-              <label>{t('autoCalculated')}</label>
+              <label>Total KG (Auto-calculated)</label>
               <input type="text" disabled value={((parseInt(inwardBags) || 0) * (parseFloat(inwardBagWeight) || 0)).toFixed(3) + " KG"} style={{ backgroundColor: '#faf6f0', fontWeight: 'bold' }} />
             </div>
 
             <div className="form-group">
-              <label>{t('notes')}</label>
+              <label>Notes</label>
               <textarea value={inwardNotes} onChange={(e) => setInwardNotes(e.target.value)} placeholder="Add any details..."></textarea>
             </div>
 
             <button type="button" onClick={(e) => {
               e.preventDefault();
               saveInwardEntry(e);
-            }} className="btn btn-primary mt-8">{t('saveInward')}</button>
+            }} className="btn btn-primary mt-8">Save Inward</button>
           </form>
         </div>
       </div>
@@ -2496,17 +2523,17 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">{t('yarnOutward')}</span>
+            <span className="bottom-sheet-title">Yarn Outward</span>
             <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setBottomSheet(null)}><i className="ti ti-plus"></i></button>
           </div>
           <form onSubmit={saveOutwardEntry} className="text-left">
             <div className="form-group">
-              <label>{t('outward')} Date</label>
+              <label>Outward Date</label>
               <input type="date" value={outwardDate} onChange={(e) => setOutwardDate(e.target.value)} required />
             </div>
 
             <div className="form-group">
-              <label>{t('partyName')}</label>
+              <label>Party Name</label>
               {!showNewPartyInput ? (
                 <select value={outwardParty} onChange={(e) => {
                   if (e.target.value === 'ADD_NEW') {
@@ -2516,53 +2543,53 @@ create policy "Users can insert own factory data." on public.factory_data for in
                     setOutwardParty(e.target.value);
                   }
                 }} required>
-                  <option value="">{t('selectParty')}</option>
+                  <option value="">Select party</option>
                   {uniqueParties.map(party => (
                     <option value={party} key={party}>{party}</option>
                   ))}
-                  <option value="ADD_NEW">{t('addNewParty')}</option>
+                  <option value="ADD_NEW">Add new party</option>
                 </select>
               ) : (
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input type="text" placeholder={t('newPartyName')} value={outwardNewParty} onChange={(e) => setOutwardNewParty(e.target.value)} autoFocus required />
+                  <input type="text" placeholder="New party name" value={outwardNewParty} onChange={(e) => setOutwardNewParty(e.target.value)} autoFocus required />
                   <button type="button" className="btn btn-secondary" style={{ minWidth: '80px' }} onClick={() => {
                     setShowNewPartyInput(false);
                     setOutwardNewParty('');
-                  }}>{t('cancel')}</button>
+                  }}>Cancel</button>
                 </div>
               )}
             </div>
 
             <div className="form-group">
-              <label>{t('color')}</label>
+              <label>Color</label>
               <select value={outwardColor} onChange={(e) => setOutwardColor(e.target.value)} required>
-                <option value="">{t('selectStockColor')}</option>
+                <option value="">Select stock color</option>
                 {db.stock.map(item => (
-                  <option value={item.color} key={item.color}>{item.color} ({item.bags} {t('bagsLeft')})</option>
+                  <option value={item.color} key={item.color}>{item.color} ({item.bags} bags left)</option>
                 ))}
               </select>
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>{t('bags')}</label>
-                <input type="number" value={outwardBags} onChange={(e) => setOutwardBags(e.target.value)} placeholder={t('bagsCount')} required />
+                <label>Bags</label>
+                <input type="number" value={outwardBags} onChange={(e) => setOutwardBags(e.target.value)} placeholder="e.g. 15" required />
               </div>
               <div className="form-group">
-                <label>{t('bagWeight')}</label>
-                <input type="number" step="0.001" value={outwardBagWeight} onChange={(e) => setOutwardBagWeight(e.target.value)} placeholder={t('bagWeightPlaceholder')} required />
+                <label>Bag Weight (KG)</label>
+                <input type="number" step="0.001" value={outwardBagWeight} onChange={(e) => setOutwardBagWeight(e.target.value)} placeholder="e.g. 50" required />
               </div>
             </div>
 
             <div className="form-group">
-              <label>{t('autoCalculated')}</label>
+              <label>Total KG (Auto-calculated)</label>
               <input type="text" disabled value={((parseInt(outwardBags) || 0) * (parseFloat(outwardBagWeight) || 0)).toFixed(3) + " KG"} style={{ backgroundColor: '#faf6f0', fontWeight: 'bold' }} />
             </div>
 
             <button type="button" onClick={(e) => {
               e.preventDefault();
               saveOutwardEntry(e);
-            }} className="btn btn-primary mt-8">{t('saveOutward')}</button>
+            }} className="btn btn-primary mt-8">Save Outward</button>
           </form>
         </div>
       </div>
@@ -2572,7 +2599,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">{t('attendance')}</span>
+            <span className="bottom-sheet-title">Attendance</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="badge-sync online" style={{ fontWeight: 'bold' }}>
                 P: {Object.values(localAttendanceMap).filter(v => v === 'present').length} | A: {Object.values(localAttendanceMap).filter(v => v === 'absent').length}
@@ -2587,14 +2614,14 @@ create policy "Users can insert own factory data." on public.factory_data for in
             </div>
 
             <div className="form-group">
-              <label>{t('shift')}</label>
+              <label>Shift</label>
               <select value={attendanceShift} onChange={(e) => setAttendanceShift(e.target.value)}>
-                <option value="Morning">{t('morningShift')}</option>
-                <option value="Night">{t('nightShift')}</option>
+                <option value="Morning">Morning Shift</option>
+                <option value="Night">Night Shift</option>
               </select>
             </div>
 
-            <h3 style={{ fontSize: '13px', margin: '12px 0 6px 0', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{t('employees')}</h3>
+            <h3 style={{ fontSize: '13px', margin: '12px 0 6px 0', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Employees</h3>
             <div className="staff-attendance-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
               {db.employees.filter(emp => emp.shift === attendanceShift).map(emp => {
                 const status = localAttendanceMap[emp.id] || 'present';
@@ -2602,7 +2629,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
                   <div className="list-row" key={emp.id} style={{ padding: '8px 0' }}>
                     <div className="row-left">
                       <span className="row-title" style={{ fontSize: '14px' }}>{emp.name}</span>
-                      <span className="row-subtitle">{emp.id} · {emp.payType === 'production' ? t('ratePerBag') : t('ratePerShift')}</span>
+                      <span className="row-subtitle">{emp.id} · {emp.payType === 'production' ? 'Rate per Bag' : 'Rate per Shift'}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button className="btn" style={{ minHeight: '36px', padding: '6px 12px', minWidth: '46px', backgroundColor: status === 'present' ? 'var(--green)' : '#cbd5e1', color: 'white' }} onClick={() => toggleLocalAttendance(emp.id, 'present')}>P</button>
@@ -2613,7 +2640,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
               })}
             </div>
 
-            <button type="button" className="btn btn-primary mt-16" onClick={saveAttendanceSheet}>{t('saveAttendance')}</button>
+            <button type="button" className="btn btn-primary mt-16" onClick={saveAttendanceSheet}>Save Attendance</button>
           </div>
         </div>
       </div>
@@ -2623,7 +2650,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">{t('addEmployee')}</span>
+            <span className="bottom-sheet-title">Add Employee</span>
             <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setBottomSheet(null)}><i className="ti ti-plus"></i></button>
           </div>
           <form onSubmit={handleAddEmployee} className="text-left">
@@ -2641,12 +2668,12 @@ create policy "Users can insert own factory data." on public.factory_data for in
               ) : photoData ? (
                 <div style={{ position: 'relative' }}>
                   <img src={photoData} className="photo-preview" alt="Snapshot Preview" />
-                  <button type="button" className="btn btn-secondary mt-8" onClick={startCamera}>{t('retakePhoto')}</button>
+                  <button type="button" className="btn btn-secondary mt-8" onClick={startCamera}>Retake Photo</button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button type="button" className="btn btn-secondary" onClick={startCamera}>
-                    <i className="ti ti-camera"></i> {t('capturePhoto')}
+                    <i className="ti ti-camera"></i> Capture Photo
                   </button>
                   <input type="file" accept="image/*" capture="user" onChange={(e) => {
                     const file = e.target.files[0];
@@ -2661,8 +2688,8 @@ create policy "Users can insert own factory data." on public.factory_data for in
             </div>
 
             <div className="form-group">
-              <label>{t('fullName')}</label>
-              <input type="text" value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder={t('egAnandhaSelvam')} required />
+              <label>Full Name</label>
+              <input type="text" value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder="e.g. Anandha Selvam" required />
             </div>
 
             <div className="form-row">
@@ -2678,11 +2705,11 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             <div className="form-row">
               <div className="form-group">
-                <label>{t('mobileNumber')}</label>
+                <label>Mobile Number</label>
                 <input type="tel" value={empPhone} onChange={(e) => setEmpPhone(e.target.value)} placeholder="98765XXXXX" required />
               </div>
               <div className="form-group">
-                <label>{t('bloodGroup')}</label>
+                <label>Blood Group</label>
                 <select value={empBlood} onChange={(e) => setEmpBlood(e.target.value)}>
                   <option value="A+">A+</option><option value="A-">A-</option>
                   <option value="B+">B+</option><option value="B-">B-</option>
@@ -2694,53 +2721,53 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             <div className="form-row">
               <div className="form-group">
-                <label>{t('dob')}</label>
+                <label>Date of Birth</label>
                 <input type="date" value={empDob} onChange={(e) => setEmpDob(e.target.value)} />
               </div>
               <div className="form-group">
-                <label>{t('aadhaar')}</label>
-                <input type="text" value={empAadhaar} onChange={(e) => setEmpAadhaar(e.target.value)} placeholder={t('twelveDigitAadhaar')} maxLength="12" />
+                <label>Aadhaar</label>
+                <input type="text" value={empAadhaar} onChange={(e) => setEmpAadhaar(e.target.value)} placeholder="12-digit Aadhaar" maxLength="12" />
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>{t('payType')}</label>
+                <label>Pay Type</label>
                 <select value={empPayType} onChange={(e) => setEmpPayType(e.target.value)}>
-                  <option value="production">{t('bagProductionPieceRate')}</option>
-                  <option value="shift">{t('shiftBasedDailyWages')}</option>
+                  <option value="production">Bag Production (Piece Rate)</option>
+                  <option value="shift">Shift Based (Daily Wages)</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>{t('shift')}</label>
+                <label>Shift</label>
                 <select value={empShift} onChange={(e) => setEmpShift(e.target.value)}>
-                  <option value="Morning">{t('morning')}</option>
-                  <option value="Night">{t('night')}</option>
+                  <option value="Morning">Morning</option>
+                  <option value="Night">Night</option>
                 </select>
               </div>
             </div>
 
             <div className="form-group">
-              <label>{empPayType === 'production' ? t('ratePerBag') : t('ratePerShift')} (₹)</label>
-              <input type="number" value={empRate} onChange={(e) => setEmpRate(e.target.value)} placeholder={t('eg120')} required />
+              <label>{empPayType === 'production' ? 'Rate per Bag' : 'Rate per Shift'} (₹)</label>
+              <input type="number" value={empRate} onChange={(e) => setEmpRate(e.target.value)} placeholder="e.g. 120" required />
             </div>
 
             <div className="form-group">
-              <label>{t('joiningDate')}</label>
+              <label>Joining Date</label>
               <input type="date" value={empJoining} onChange={(e) => setEmpJoining(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>{t('address')}</label>
+              <label>Address</label>
               <textarea value={empAddress} onChange={(e) => setEmpAddress(e.target.value)} rows="2"></textarea>
             </div>
 
             <div className="form-group">
-              <label>{t('uploadDoc')}</label>
+              <label>Upload Document</label>
               <input type="file" />
             </div>
 
-            <button type="submit" className="btn btn-primary mt-8">{t('addEmployee')}</button>
+            <button type="submit" className="btn btn-primary mt-8">Add Employee</button>
           </form>
         </div>
       </div>
@@ -2750,28 +2777,28 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">{t('editStock')}</span>
+            <span className="bottom-sheet-title">Edit Stock</span>
             <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setBottomSheet(null)}><i className="ti ti-plus"></i></button>
           </div>
           <div className="text-left">
             <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', marginBottom: '12px' }}>Colour: {selectedStockColor}</h3>
 
             <div className="form-group">
-              <label>{t('kg')} {t('kgQuantity')}</label>
+              <label>KG Quantity</label>
               <input type="number" step="0.1" value={stockEditKg} onChange={(e) => setStockEditKg(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>{t('bags')} Count</label>
+              <label>Bags Count</label>
               <input type="number" value={stockEditBags} onChange={(e) => setStockEditBags(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>{t('reasonForChange')}</label>
+              <label>Reason for Change</label>
               <select value={stockEditReason} onChange={(e) => setStockEditReason(e.target.value)}>
-                <option value="Stock audit">{t('stockAudit')}</option>
-                <option value="Yarn wastage">{t('yarnWastage')}</option>
-                <option value="Damaged yarn">{t('damagedYarn')}</option>
+                <option value="Stock audit">Stock Audit</option>
+                <option value="Yarn wastage">Yarn Wastage</option>
+                <option value="Damaged yarn">Damaged Yarn</option>
               </select>
             </div>
 
@@ -2779,11 +2806,11 @@ create policy "Users can insert own factory data." on public.factory_data for in
               <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={(e) => {
                 e.preventDefault();
                 saveStockEdit(false);
-              }}>{t('save')}</button>
+              }}>Save</button>
               <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={(e) => {
                 e.preventDefault();
                 saveStockEdit(true);
-              }}>{t('remove')}</button>
+              }}>Remove</button>
             </div>
           </div>
         </div>
@@ -2794,7 +2821,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">{t('editPayroll')}</span>
+            <span className="bottom-sheet-title">Edit Payroll</span>
             <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setBottomSheet(null)}><i className="ti ti-plus"></i></button>
           </div>
           <div className="text-left">
@@ -2805,28 +2832,28 @@ create policy "Users can insert own factory data." on public.factory_data for in
             <div className="form-group">
               <label>
                 {db.employees.find(e => e.id === selectedPayrollEmpId)?.payType === 'production'
-                  ? t('bagsProduced')
+                  ? "Bags Produced"
                   : "Shifts Worked"}
               </label>
               <input type="number" value={editPayrollUnits} onChange={(e) => setEditPayrollUnits(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>{t('rate')} (₹)</label>
+              <label>Rate (₹)</label>
               <input type="number" value={editPayrollRate} onChange={(e) => setEditPayrollRate(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>{t('advanceDeduction')} (₹)</label>
+              <label>Advance Deduction (₹)</label>
               <input type="number" value={editPayrollAdvance} onChange={(e) => setEditPayrollAdvance(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>{t('netPay')} ({t('autoCalculated')})</label>
+              <label>Net Pay (Total KG (Auto-calculated))</label>
               <input type="text" disabled style={{ fontWeight: 'bold', backgroundColor: '#faf6f0' }} value={"₹" + Math.max(0, (parseFloat(editPayrollUnits) || 0) * (parseFloat(editPayrollRate) || 0) - (parseFloat(editPayrollAdvance) || 0))} />
             </div>
 
-            <button className="btn btn-primary mt-16" onClick={savePayrollItemEdit}>{t('save')}</button>
+            <button className="btn btn-primary mt-16" onClick={savePayrollItemEdit}>Save</button>
           </div>
         </div>
       </div>
@@ -2842,10 +2869,10 @@ create policy "Users can insert own factory data." on public.factory_data for in
           <p className="dialog-message">{confirmModal.message}</p>
           <div className="dialog-buttons">
             <button className="btn btn-secondary" onClick={() => setConfirmModal(prev => ({ ...prev, visible: false }))}>
-              {t('cancel')}
+              Cancel
             </button>
             <button className="btn btn-primary" onClick={confirmModal.action}>
-              {confirmModal.buttonText || t('save')}
+              {confirmModal.buttonText || 'Save'}
             </button>
           </div>
         </div>
@@ -3178,8 +3205,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteStock = () => {
     setConfirmModal({
       visible: true,
-      title: t('deleteStock'),
-      message: t('confirmDeleteStock'),
+      title: "Delete Stock",
+      message: "Confirm delete stock?",
       action: () => {
         const updatedStock = db.stock.filter(s => s.id !== selectedStock.id);
         setDb(prev => ({ ...prev, stock: updatedStock }));
@@ -3273,8 +3300,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteEmployee = () => {
     setConfirmModal({
       visible: true,
-      title: t('deleteEmployee'),
-      message: t('confirmDeleteEmployee'),
+      title: "Delete Employee",
+      message: "Confirm delete employee?",
       action: () => {
         const updatedEmployees = db.employees.filter(e => e.id !== selectedEmployee.id);
         setDb(prev => ({ ...prev, employees: updatedEmployees }));
@@ -3350,8 +3377,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteYarn = () => {
     setConfirmModal({
       visible: true,
-      title: t('deleteYarn'),
-      message: t('confirmDeleteYarn'),
+      title: "Delete Yarn",
+      message: "Confirm delete yarn?",
       action: () => {
         const updatedYarn = db.yarn.filter(y => y.id !== selectedYarn.id);
         setDb(prev => ({ ...prev, yarn: updatedYarn }));
@@ -3406,8 +3433,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteInward = () => {
     setConfirmModal({
       visible: true,
-      title: t('deleteInwardEntry'),
-      message: t('confirmDeleteInward'),
+      title: "Delete Inward Entry",
+      message: "Confirm delete inward entry?",
       action: () => {
         const updatedInward = db.inward.filter(item => item.id !== selectedInward.id);
         setDb(prev => ({ ...prev, inward: updatedInward }));
@@ -3459,8 +3486,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteOutward = () => {
     setConfirmModal({
       visible: true,
-      title: t('deleteOutwardEntry'),
-      message: t('confirmDeleteOutward'),
+      title: "Delete Outward Entry",
+      message: "Confirm delete outward entry?",
       action: () => {
         const updatedOutward = db.outward.filter(item => item.id !== selectedOutward.id);
         setDb(prev => ({ ...prev, outward: updatedOutward }));
@@ -3475,16 +3502,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
     <div className="view-panel">
       <div className="flex-row-center">
         <div className="text-left">
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>{t('totalStock')}</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>Total Stock</span>
           <h1 style={{ fontSize: '24px', margin: '2px 0 0 0' }}>{totalStockKg.toFixed(1)} KG</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>{totalStockBags} Bags in Warehouse</p>
         </div>
         <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => {
           if (activeTab === 'stock') handleAddStock();
           else if (activeTab === 'employees') handleAddEmployee();
-          else setBottomSheet('inward');
+          else setBottomSheeInward;
         }}>
-          <i className="ti ti-plus"></i> {t('add')}
+          <i className="ti ti-plus"></i> Add
         </button>
       </div>
 
@@ -3492,7 +3519,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
       <div className="mt-12" style={{ position: 'relative' }}>
         <input
           type="text"
-          placeholder={t('searchPlaceholder')}
+          placeholder="Search..."
           value={searchTerm}
           onChange={(e) => handleSearchChange(e.target.value)}
           onFocus={() => searchTerm.length > 0 && setShowSearchSuggestions(true)}
@@ -3548,19 +3575,19 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           onChange={(e) => setSortBy(e.target.value)}
           style={{ padding: '6px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: '600' }}
         >
-          <option value="name">{t('sortByName')}</option>
-          <option value="dateCreated">{t('sortByDateCreated')}</option>
-          <option value="lastUpdated">{t('sortByLastUpdated')}</option>
-          <option value="quantity">{t('sortByQuantity')}</option>
+          <option value="name">Sort by Name</option>
+          <option value="dateCreated">Sort by Date Created</option>
+          <option value="lastUpdated">Sort by Last Updated</option>
+          <option value="quantity">Sort by Quantity</option>
         </select>
       </div>
 
       {/* Tabs */}
       <div className="tabs-header mt-12">
-        <button className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => setActiveTab('stock')}>{t('stockTab')}</button>
-        <button className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>{t('employeesTab')}</button>
-        <button className={`tab-btn ${activeTab === 'inward' ? 'active' : ''}`} onClick={() => setActiveTab('inward')}>{t('inward')}</button>
-        <button className={`tab-btn ${activeTab === 'outward' ? 'active' : ''}`} onClick={() => setActiveTab('outward')}>{t('outward')}</button>
+        <button className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => setActiveTab('stock')}>Stock</button>
+        <button className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>Employees</button>
+        <button className={`tab-btn ${activeTab === 'inward' ? 'active' : ''}`} onClick={() => setActiveTab('inward')}>Inward</button>
+        <button className={`tab-btn ${activeTab === 'outward' ? 'active' : ''}`} onClick={() => setActiveTab('outward')}>Outward</button>
       </div>
 
       {/* Stock Tab */}
@@ -3569,7 +3596,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           {filteredItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               <i className="ti ti-package" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
-              <p>{t('emptyState')}</p>
+              <p>No items found</p>
             </div>
           ) : (
             <div className="stock-list">
@@ -3598,7 +3625,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           {filteredItems.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               <i className="ti ti-users" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
-              <p>{t('emptyState')}</p>
+              <p>No items found</p>
             </div>
           ) : (
             filteredItems.map(emp => (
@@ -3637,7 +3664,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
             >
               <div className="history-header">
                 <span className="history-party">{item.supplier}</span>
-                <span className="history-badge inward">{t('inward')}</span>
+                <span className="history-badge inward">Inward</span>
               </div>
               <div className="history-details">
                 <span>{item.color} · {item.bags} bags</span>
@@ -3664,7 +3691,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
             >
               <div className="history-header">
                 <span className="history-party">{item.partyName}</span>
-                <span className="history-badge outward">{t('outward')}</span>
+                <span className="history-badge outward">Outward</span>
               </div>
               <div className="history-details">
                 <span>{item.color} · {item.bags} bags</span>
@@ -3681,7 +3708,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Recent Activity */}
       <div className="card mt-16">
-        <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>{t('recentActivity')}</h3>
+        <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>Recent Activity</h3>
         <div className="activity-feed">
           {db.activity.slice(0, 5).map((item, idx) => {
             let icon = "ti ti-info-circle";
@@ -3694,12 +3721,12 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
             let activityText = item.text;
             if (item.data) {
               if (item.type === 'inward') {
-                activityText = `${t('received')} ${item.data.bags} ${t('bags')} ${item.data.color} ${t('from')} ${item.data.supplier}`;
+                activityText = `Received ${item.data.bags} Bags ${item.data.color} from ${item.data.supplier}`;
               } else if (item.type === 'outward') {
-                activityText = `${t('dispatched')} ${item.data.bags} ${t('bags')} ${item.data.color} ${t('to')} ${item.data.party}`;
+                activityText = `Dispatched ${item.data.bags} Bags ${item.data.color} to ${item.data.party}`;
               } else if (item.data.type) {
-                const actionText = item.type.includes('Added') ? t('added') : item.type.includes('Updated') ? t('updated') : t('deleted');
-                activityText = `${t(item.data.type)} ${actionText}: ${item.data.name}`;
+                const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
+                activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
               }
             }
 
@@ -3725,16 +3752,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         <div className="dialog-overlay active" onClick={() => setShowStockModal(false)}>
           <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
+              {isAddingStock ? 'Add Stock' : 'View Details'}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label>{t('stockName')}</label>
+                <label>Stock Name</label>
                 <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
               </div>
               <div className="form-row">
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>{t('yarnType')}</label>
+                  <label>Yarn Type</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -3783,7 +3810,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                   )}
                 </div>
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>{t('color')}</label>
+                  <label>Color</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -3834,36 +3861,36 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>{t('lotNumber')}</label>
+                  <label>Lot Number</label>
                   <input type="text" value={stockForm.lotNumber} onChange={(e) => setStockForm({...stockForm, lotNumber: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>{t('numBags')}</label>
+                  <label>Number of Bags</label>
                   <input type="number" value={stockForm.numBags} onChange={(e) => setStockForm({...stockForm, numBags: e.target.value})} />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>{t('weightPerBag')}</label>
+                  <label>Weight Per Bag (KG)</label>
                   <input type="number" step="0.001" value={stockForm.weightPerBag} onChange={(e) => setStockForm({...stockForm, weightPerBag: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>{t('totalWeight')}</label>
+                  <label>Total Weight (KG)</label>
                   <input type="number" step="0.001" value={stockForm.totalWeight} onChange={(e) => setStockForm({...stockForm, totalWeight: e.target.value})} />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>{t('purchasePrice')}</label>
+                  <label>Purchase Price (₹)</label>
                   <input type="number" value={stockForm.purchasePrice} onChange={(e) => setStockForm({...stockForm, purchasePrice: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>{t('purchaseDate')}</label>
+                  <label>Purchase Date</label>
                   <input type="date" value={stockForm.purchaseDate} onChange={(e) => setStockForm({...stockForm, purchaseDate: e.target.value})} />
                 </div>
               </div>
               <div className="form-group" style={{ position: 'relative' }}>
-                <label>{t('supplierName')}</label>
+                <label>Supplier Name</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <input 
                     type="text" 
@@ -3912,15 +3939,15 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 )}
               </div>
               <div className="form-group">
-                <label>{t('stockNotes')}</label>
+                <label>Stock Notes</label>
                 <textarea value={stockForm.notes} onChange={(e) => setStockForm({...stockForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>Cancel</button>
                 {!isAddingStock && (
-                  <button type="button" className="btn btn-danger" onClick={deleteStock}>{t('deleteStock')}</button>
+                  <button type="button" className="btn btn-danger" onClick={deleteStock}>Delete Stock</button>
                 )}
-                <button type="button" className="btn btn-primary" onClick={saveStock}>{t('saveStock')}</button>
+                <button type="button" className="btn btn-primary" onClick={saveStock}>Save Stock</button>
               </div>
             </div>
           </div>
@@ -3932,34 +3959,34 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         <div className="dialog-overlay active" onClick={() => setShowEmployeeModal(false)}>
           <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingEmployee ? t('addEmployee') : t('viewDetails')}
+              {isAddingEmployee ? 'Add Employee' : 'View Details'}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label>{t('employeeName')}</label>
+                <label>Employee Name</label>
                 <input type="text" value={employeeForm.fullName} onChange={(e) => setEmployeeForm({...employeeForm, fullName: e.target.value})} />
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>{t('employeeId')}</label>
+                  <label>Employee ID</label>
                   <input type="text" value={employeeForm.employeeId} onChange={(e) => setEmployeeForm({...employeeForm, employeeId: e.target.value})} disabled={!isAddingEmployee} />
                 </div>
                 <div className="form-group">
-                  <label>{t('mobileNumber')}</label>
+                  <label>Mobile Number</label>
                   <input type="text" value={employeeForm.phone} onChange={(e) => setEmployeeForm({...employeeForm, phone: e.target.value})} />
                 </div>
               </div>
               <div className="form-group">
-                <label>{t('email')}</label>
+                <label>Email</label>
                 <input type="email" value={employeeForm.email} onChange={(e) => setEmployeeForm({...employeeForm, email: e.target.value})} />
               </div>
               <div className="form-group">
-                <label>{t('address')}</label>
+                <label>Address</label>
                 <textarea value={employeeForm.address} onChange={(e) => setEmployeeForm({...employeeForm, address: e.target.value})} rows="2"></textarea>
               </div>
               <div className="form-row">
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>{t('designation')}</label>
+                  <label>Designation</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -4008,7 +4035,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                   )}
                 </div>
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>{t('department')}</label>
+                  <label>Department</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -4059,27 +4086,27 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>{t('joiningDate')}</label>
+                  <label>Joining Date</label>
                   <input type="date" value={employeeForm.joiningDate} onChange={(e) => setEmployeeForm({...employeeForm, joiningDate: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>{t('salary')}</label>
+                  <label>Salary (₹)</label>
                   <input type="number" value={employeeForm.salary} onChange={(e) => setEmployeeForm({...employeeForm, salary: e.target.value})} />
                 </div>
               </div>
               <div className="form-group">
-                <label>{t('employeeStatus')}</label>
+                <label>Status</label>
                 <select value={employeeForm.status} onChange={(e) => setEmployeeForm({...employeeForm, status: e.target.value})}>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{Cancel}</button>
                 {!isAddingEmployee && (
-                  <button type="button" className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
+                  <button type="button" className="btn btn-danger" onClick={deleteEmployee}>Delete Employee</button>
                 )}
-                <button type="button" className="btn btn-primary" onClick={saveEmployee}>{t('saveEmployee')}</button>
+                <button type="button" className="btn btn-primary" onClick={saveEmployee}>Save Employee</button>
               </div>
             </div>
           </div>
@@ -4217,7 +4244,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{Cancel}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteInward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveInward}>Save</button>
               </div>
@@ -4308,7 +4335,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <input type="number" step="0.001" value={outwardForm.totalKg} onChange={(e) => setOutwardForm({...outwardForm, totalKg: e.target.value})} />
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{Cancel}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteOutward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveOutward}>Save</button>
               </div>
@@ -4338,20 +4365,20 @@ function StaffPage({ db, t, lang, setBottomSheet, setActiveEmployeeId, navigateT
     <div className="view-panel">
       <div className="flex-row-center">
         <div className="text-left">
-          <h1 style={{ fontSize: '24px', margin: '0' }}>{t('employees')}</h1>
+          <h1 style={{ fontSize: '24px', margin: '0' }}>Employees</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>
-            {totalStaffCount} {t('employees')} · {activeStaffToday} {t('activeToday')}
+            {totalStaffCount} Employees · {activeStaffToday} Active Today
           </p>
         </div>
         <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => setBottomSheet('add_employee')}>
-          <i className="ti ti-plus"></i> {t('add')}
+          <i className="ti ti-plus"></i> Add
         </button>
       </div>
 
       <div className="mt-12" style={{ position: 'relative' }}>
         <input
           type="text"
-          placeholder={t('searchEmployeePlaceholder')}
+          placeholder="Search employees..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ width: '100%', padding: '10px 12px 10px 36px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', outline: 'none' }}
@@ -4360,9 +4387,9 @@ function StaffPage({ db, t, lang, setBottomSheet, setActiveEmployeeId, navigateT
       </div>
 
       <div className="tabs-header mt-12">
-        <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>{t('all')}</button>
-        <button className={`tab-btn ${activeTab === 'morning' ? 'active' : ''}`} onClick={() => setActiveTab('morning')}>{t('morning')}</button>
-        <button className={`tab-btn ${activeTab === 'night' ? 'active' : ''}`} onClick={() => setActiveTab('night')}>{t('night')}</button>
+        <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All</button>
+        <button className={`tab-btn ${activeTab === 'morning' ? 'active' : ''}`} onClick={() => setActiveTab('morning')}>Morning</button>
+        <button className={`tab-btn ${activeTab === 'night' ? 'active' : ''}`} onClick={() => setActiveTab('night')}>Night</button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -4438,27 +4465,27 @@ function EmployeeProfile({ emp, t, lang, startEditEmployee, removeEmployee, navi
 
         {/* Personal Details */}
         <div className="card text-left">
-          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>{t('personalDetails')}</h3>
-          <div className="profile-info-row"><span className="summary-label">{t('mobileNumber')}</span><span className="summary-value">{emp.phone}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{t('aadhaar')}</span><span className="summary-value">{emp.aadhaar}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{t('dob')}</span><span className="summary-value">{emp.dob || "1994-08-12"}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{t('joiningDate')}</span><span className="summary-value">{emp.joiningDate}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{t('address')}</span><span className="summary-value">{emp.address}</span></div>
+          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>Personal Details</h3>
+          <div className="profile-info-row"><span className="summary-label">Mobile Number</span><span className="summary-value">{emp.phone}</span></div>
+          <div className="profile-info-row"><span className="summary-label">Aadhaar</span><span className="summary-value">{emp.aadhaar}</span></div>
+          <div className="profile-info-row"><span className="summary-label">Date of Birth</span><span className="summary-value">{emp.dob || "1994-08-12"}</span></div>
+          <div className="profile-info-row"><span className="summary-label">Joining Date</span><span className="summary-value">{emp.joiningDate}</span></div>
+          <div className="profile-info-row"><span className="summary-label">Address</span><span className="summary-value">{emp.address}</span></div>
         </div>
 
         {/* Salary details */}
         <div className="card text-left">
-          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>{t('salaryInfo')}</h3>
-          <div className="profile-info-row"><span className="summary-label">{t('payType')}</span><span className="summary-value" style={{ textTransform: 'capitalize' }}>{emp.payType === 'production' ? t('pieceRateBags') : t('dailyWages')}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{emp.payType === 'production' ? t('ratePerBag') : t('ratePerShift')}</span><span className="summary-value">₹{emp.rate}</span></div>
-          <div className="profile-info-row"><span className="summary-label">{t('advanceDeduction')}</span><span className="summary-value">₹150</span></div>
+          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>Salary Info</h3>
+          <div className="profile-info-row"><span className="summary-label">Pay Type</span><span className="summary-value" style={{ textTransform: 'capitalize' }}>{emp.payType === 'production' ? 'Piece Rate (Bags)' : 'Daily Wages'}</span></div>
+          <div className="profile-info-row"><span className="summary-label">{emp.payType === 'production' ? 'Rate per Bag' : 'Rate per Shift'}</span><span className="summary-value">₹{emp.rate}</span></div>
+          <div className="profile-info-row"><span className="summary-label">Advance Deduction</span><span className="summary-value">₹150</span></div>
         </div>
 
         {/* Weekly Attendance 7 days grid */}
         <div className="card text-left">
           <div className="flex-row-center" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-            <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>{t('thisWeekAttendance')}</h3>
-            <button className="btn-text" style={{ padding: '0', minHeight: 'auto' }} onClick={() => setBottomSheet('attendance')}>{t('save')}</button>
+            <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>This Week's Attendance</h3>
+            <button className="btn-text" style={{ padding: '0', minHeight: 'auto' }} onClick={() => setBottomSheet('attendance')}>Save</button>
           </div>
           <div className="attendance-grid">
             {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
@@ -4529,7 +4556,7 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
   return (
     <div className="view-panel">
       <div className="text-left">
-        <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>{t('payroll')} | Week {getWeekNumber()}</span>
+        <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>Payroll | Week {getWeekNumber()}</span>
         <h1 style={{ fontSize: '24px', margin: '2px 0 0 0' }}>₹{totals.netTotal.toFixed(2)}</h1>
         <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>Wages payable to staff</p>
       </div>
@@ -4537,24 +4564,24 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
       {/* Summary box */}
       <div className="card grid-2x2 text-left">
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span className="stat-label">{t('payable')}</span>
+          <span className="stat-label">Payable</span>
           <span className="stat-value" style={{ fontSize: '18px' }}>₹{totals.netTotal}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span className="stat-label">{t('advances')}</span>
+          <span className="stat-label">Advances</span>
           <span className="stat-value" style={{ fontSize: '18px' }}>₹{totals.advanceTotal}</span>
         </div>
       </div>
 
       <div className="tabs-header mt-8">
-        <button className={`tab-btn ${payrollType === 'production' ? 'active' : ''}`} onClick={() => setPayrollType('production')}>{t('bagProduction')}</button>
-        <button className={`tab-btn ${payrollType === 'shift' ? 'active' : ''}`} onClick={() => setPayrollType('shift')}>{t('shiftWise')}</button>
+        <button className={`tab-btn ${payrollType === 'production' ? 'active' : ''}`} onClick={() => setPayrollType('production')}>Bag Production</button>
+        <button className={`tab-btn ${payrollType === 'shift' ? 'active' : ''}`} onClick={() => setPayrollType('shift')}>Shift Wise</button>
       </div>
 
       <div className="card text-left" style={{ border: '1px dashed var(--accent-terracotta)', backgroundColor: 'rgba(27, 43, 107, 0.04)' }}>
-        <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>{t('startPayroll')}</h3>
-        <p style={{ fontSize: '12px', margin: '4px 0 8px 0', fontWeight: '600' }}>{t('compileActiveRecords')}</p>
-        <button className="btn btn-primary" style={{ padding: '8px 12px', minHeight: '36px', width: 'auto' }} onClick={handleStartPayroll}>{t('runWeeklyLedger')}</button>
+        <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>Start Payroll</h3>
+        <p style={{ fontSize: '12px', margin: '4px 0 8px 0', fontWeight: '600' }}>Compile active staff records for this week</p>
+        <button className="btn btn-primary" style={{ padding: '8px 12px', minHeight: '36px', width: 'auto' }} onClick={handleStartPayroll}>Run Weekly Ledger</button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} className="mt-8">
@@ -4586,7 +4613,7 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
           <i className="ti ti-printer"></i> Print Statement
         </button>
         <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('PDF downloaded'); window.print(); }}>
-          <i className="ti ti-download"></i> {t('downloadPDF')}
+          <i className="ti ti-download"></i> Download PDF
         </button>
       </div>
     </div>
@@ -4602,7 +4629,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
     <div className="view-panel">
       <div className="flex-row-center">
         <div className="text-left">
-          <h1 style={{ fontSize: '24px', margin: '0' }}>{t('reports')}</h1>
+          <h1 style={{ fontSize: '24px', margin: '0' }}>Reports</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>Download statistics ledger statements</p>
         </div>
         <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => window.print()}>
@@ -4614,10 +4641,10 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
       <div className="card text-left">
         <span className="stat-label">Select Date Scope</span>
         <div className="tabs-header mt-8" style={{ borderBottom: 'none' }}>
-          <button className={`tab-btn ${reportRange === 'today' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('today')}>{t('today')}</button>
+          <button className={`tab-btn ${reportRange === 'today' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('today')}>Today</button>
           <button className={`tab-btn ${reportRange === '1week' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('1week')}>1 Week</button>
           <button className={`tab-btn ${reportRange === '1month' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('1month')}>1 Month</button>
-          <button className={`tab-btn ${reportRange === 'custom' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('custom')}>{t('customDate')}</button>
+          <button className={`tab-btn ${reportRange === 'custom' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('custom')}>Custom</button>
         </div>
 
         {reportRange === 'custom' && (
@@ -4640,7 +4667,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-package"></i></div>
             <div className="report-details">
-              <span className="report-title">{t('stockReport')}</span>
+              <span className="report-title">Stock Report</span>
               <span className="report-subtitle">Current stock details ({totalStockKg.toFixed(1)} KG)</span>
             </div>
           </div>
@@ -4651,7 +4678,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-cash"></i></div>
             <div className="report-details">
-              <span className="report-title">{t('payrollReport')}</span>
+              <span className="report-title">Payroll Report</span>
               <span className="report-subtitle">Staff wages breakdown (Week total: ₹{weeklyWagesSum})</span>
             </div>
           </div>
@@ -4662,7 +4689,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-users"></i></div>
             <div className="report-details">
-              <span className="report-title">{t('employeeReport')}</span>
+              <span className="report-title">Employee Report</span>
               <span className="report-subtitle">Attendance lists & roll sheets history</span>
             </div>
           </div>
@@ -4673,7 +4700,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-chart-arrows"></i></div>
             <div className="report-details">
-              <span className="report-title">{t('prodSummaryReport')}</span>
+              <span className="report-title">Production Summary Report</span>
               <span className="report-subtitle">Production inward/outward flow (Today: {productionTodayKg} KG)</span>
             </div>
           </div>
@@ -4683,7 +4710,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
 
       {/* Supplier Section summary */}
       <div className="card text-left mt-8">
-        <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>{t('suppliersSection')}</h3>
+        <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>Suppliers Section</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} className="mt-12">
           {Object.entries(supplierDeliveries).map(([name, obj]) => (
             <div className="list-row" key={name}>
@@ -4810,7 +4837,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
       .map(s => s.trim())
       .filter(s => s && !/^\d+$/.test(s) && !s.toLowerCase().includes('tamil'))
       .pop() || db.settings.address
-    : 'Palladam';
+    : 'Chennimalai';
 
   const toggleSection = (sectionName) => {
     setExpandedSection(prev => prev === sectionName ? null : sectionName);
@@ -4829,7 +4856,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           )}
         </div>
         <div className="settings-profile-info">
-          <h2 className="settings-profile-owner">{db.settings.factoryName || t('factory')}</h2>
+          <h2 className="settings-profile-owner">{db.settings.factoryName || 'Factory'}</h2>
           {db.settings.email && (
             <p className="settings-profile-email" style={{ fontSize: '13px', opacity: 0.7, margin: '2px 0 4px 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <i className="ti ti-mail" style={{ fontSize: '14px' }}></i>
@@ -4854,7 +4881,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('factory')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-building-factory-2 section-icon"></i>
-              <span>{t('factorySettings')}</span>
+              <span>Factory Settings</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'factory' ? 'rotate' : ''}`}></i>
           </div>
@@ -4862,29 +4889,29 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
             <div className="settings-accordion-content text-left">
               <form onSubmit={saveSettings} style={{ marginTop: '12px' }}>
                 <div className="form-group">
-                  <label>{t('factoryNameLabel')}</label>
+                  <label>Factory Name</label>
                   <input type="text" value={facName} onChange={(e) => setFacName(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>{t('ownerNameLabel')}</label>
+                  <label>Owner Name</label>
                   <input type="text" value={facOwner} onChange={(e) => setFacOwner(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>{t('factoryAddressLabel')}</label>
+                  <label>Factory Address</label>
                   <input type="text" value={facAddress} onChange={(e) => setFacAddress(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>{t('phoneContact')}</label>
+                  <label>Phone Contact</label>
                   <input type="tel" value={facPhone} onChange={(e) => setFacPhone(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>{t('currentLocation')}</label>
+                  <label>Current Location</label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input 
                       type="text" 
                       value={facLocation} 
                       onChange={(e) => setFacLocation(e.target.value)} 
-                      placeholder={t('coordinates')}
+                      placeholder="Coordinates"
                       readOnly
                       style={{ flex: 1 }}
                     />
@@ -4894,22 +4921,22 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
                       onClick={handleGetCurrentLocation}
                       style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }}
                     >
-                      <i className="ti ti-map-pin"></i> {t('getLocation')}
+                      <i className="ti ti-map-pin"></i> Get Location
                     </button>
                   </div>
                 </div>
 
                 {/* Logo Upload inside Factory Settings */}
                 <div className="form-group">
-                  <label>{t('factoryLogo')}</label>
+                  <label>Factory Logo</label>
                   <div className="logo-upload-container">
                     {db.settings.logo ? (
                       <div className="logo-preview-row">
                         <img src={db.settings.logo} className="logo-preview-img" alt="Logo Preview" />
                         <div className="logo-actions">
-                          <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{t('logoActive')}</span>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold' }}>Logo Active</span>
                           <button type="button" className="logo-action-btn-small danger" onClick={handleRemoveLogo}>
-                            {t('removeLogo')}
+                            Remove Logo
                           </button>
                         </div>
                       </div>
@@ -4917,14 +4944,14 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
                       <div>
                         <input type="file" accept="image/*" id="logo-file-input" style={{ display: 'none' }} onChange={handleLogoUpload} />
                         <button type="button" className="btn btn-secondary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => document.getElementById('logo-file-input').click()}>
-                          <i className="ti ti-upload"></i> {t('uploadLogo')}
+                          <i className="ti ti-upload"></i> Upload Logo
                         </button>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <button type="submit" className="btn btn-primary mt-8">{t('save')}</button>
+                <button type="submit" className="btn btn-primary mt-8">Save</button>
               </form>
             </div>
           )}
@@ -4935,7 +4962,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('notifications')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-bell section-icon"></i>
-              <span>{t('notifications')}</span>
+              <span>Notifications</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'notifications' ? 'rotate' : ''}`}></i>
           </div>
@@ -4944,8 +4971,8 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
               <div className="toggle-settings-list">
                 <div className="toggle-settings-row">
                   <div className="toggle-settings-label">
-                    <span className="toggle-title">{t('reminders')}</span>
-                    <span className="toggle-desc">{t('remindersDesc')}</span>
+                    <span className="toggle-title">Reminders</span>
+                    <span className="toggle-desc">Payroll reminders and alerts</span>
                   </div>
                   <label className="switch">
                     <input type="checkbox" checked={payReminders} onChange={() => handleToggleNotification('payrollReminders', payReminders)} />
@@ -4962,7 +4989,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('language')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-language section-icon"></i>
-              <span>{t('languageSelection')}</span>
+              <span>Language Selection</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'language' ? 'rotate' : ''}`}></i>
           </div>
@@ -4991,7 +5018,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('data')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-database section-icon"></i>
-              <span>{t('dataAndBackup')}</span>
+              <span>Data & Backup</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'data' ? 'rotate' : ''}`}></i>
           </div>
@@ -5002,18 +5029,18 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
                   <div className="data-action-left">
                     <i className="ti ti-cloud-upload"></i>
                     <div className="data-action-text">
-                      <span className="data-action-title">{t('syncNow')}</span>
+                      <span className="data-action-title">Sync Now</span>
                       <span className="data-action-desc">Cloud Sync Status: Active</span>
                     </div>
                   </div>
-                  <span className="badge-sync online" style={{ minHeight: 'auto' }}>{t('synced')}</span>
+                  <span className="badge-sync online" style={{ minHeight: 'auto' }}>Synced</span>
                 </div>
 
                 <div className="data-action-row" onClick={exportAllData}>
                   <div className="data-action-left">
                     <i className="ti ti-file-export"></i>
                     <div className="data-action-text">
-                      <span className="data-action-title">{t('exportData')}</span>
+                      <span className="data-action-title">Export Data</span>
                       <span className="data-action-desc">Download complete database as JSON file</span>
                     </div>
                   </div>
@@ -5041,9 +5068,9 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
       <div className="card settings-logout-card" onClick={() => {
         setConfirmModal({
           visible: true,
-          title: t('logout'),
-          message: t('confirmLogout'),
-          buttonText: t('confirmLogoutButton'),
+          title: "Logout",
+          message: "Are you sure you want to logout?",
+          buttonText: "Confirm Logout",
           action: () => {
             handleLogout();
             setConfirmModal(prev => ({ ...prev, visible: false }));
@@ -5052,7 +5079,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
       }}>
         <div className="settings-row-logout">
           <i className="ti ti-logout"></i>
-          <span>{t('logout')}</span>
+          <span>Logout</span>
         </div>
       </div>
 
