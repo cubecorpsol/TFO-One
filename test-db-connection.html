@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-result {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #ccc;
+        }
+        .success { border-left-color: #4CAF50; }
+        .error { border-left-color: #f44336; }
+        .info { border-left-color: #2196F3; }
+        .loading { border-left-color: #FF9800; }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover { background: #1976D2; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>Supabase Database Connection Test</h1>
+    <p>This page tests the database connection and verifies the table structure.</p>
+    
+    <button id="testBtn" onclick="runTests()">Run Database Tests</button>
+    
+    <div id="results"></div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const SUPABASE_URL = 'https://bxdhyurmbufiwtibalji.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4ZGh5dXJtYnVmaXd0aWJhbGppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDkwMjgsImV4cCI6MjA5Nzc4NTAyOH0.m0wYVPc4UQNYBGE5fUzFUq2-nIAKFhXPHDnJWU08ks0';
+
+        let supabase;
+        const resultsDiv = document.getElementById('results');
+        const testBtn = document.getElementById('testBtn');
+
+        function addResult(type, title, message, data = null) {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `
+                <strong>${title}</strong>
+                <p>${message}</p>
+                ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ''}
+            `;
+            resultsDiv.appendChild(div);
+        }
+
+        async function runTests() {
+            testBtn.disabled = true;
+            resultsDiv.innerHTML = '';
+            
+            // Test 1: Initialize Supabase Client
+            addResult('loading', 'Test 1: Initializing Supabase Client', 'Creating Supabase client with provided credentials...');
+            
+            try {
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: {
+                        persistSession: true,
+                        autoRefreshToken: true,
+                        debug: true
+                    }
+                });
+                addResult('success', 'Test 1: Supabase Client Initialized', 'Client created successfully');
+            } catch (error) {
+                addResult('error', 'Test 1: Failed to Initialize Client', error.message);
+                testBtn.disabled = false;
+                return;
+            }
+
+            // Test 2: Check if factory_data table exists
+            addResult('loading', 'Test 2: Checking factory_data Table', 'Querying table structure...');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    if (error.code === '42P01') {
+                        addResult('error', 'Test 2: Table Does Not Exist', 'The "factory_data" table does not exist in the database. Please create it.', error);
+                    } else {
+                        addResult('error', 'Test 2: Query Failed', error.message, error);
+                    }
+                } else {
+                    addResult('success', 'Test 2: Table Exists', 'The "factory_data" table exists and is accessible', data);
+                }
+            } catch (error) {
+                addResult('error', 'Test 2: Unexpected Error', error.message, error);
+            }
+
+            // Test 3: Check table structure
+            addResult('loading', 'Test 3: Checking Table Structure', 'Retrieving table schema...');
+            
+            try {
+                // Try to get a sample record to understand the structure
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    addResult('error', 'Test 3: Failed to Check Structure', error.message, error);
+                } else if (data && data.length > 0) {
+                    addResult('success', 'Test 3: Table Structure Found', 'Sample record structure:', data[0]);
+                } else {
+                    addResult('info', 'Test 3: Empty Table', 'Table exists but has no records. Expected columns: id, settings, employees, stock, inward, outward, activity, attendance, payroll_runs, email, updated_at');
+                }
+            } catch (error) {
+                addResult('error', 'Test 3: Unexpected Error', error.message, error);
+            }
+
+            // Test 4: Test Insert Operation
+            addResult('loading', 'Test 4: Testing Insert Operation', 'Attempting to insert a test record...');
+            
+            const testUserId = 'test-user-' + Date.now();
+            const testRecord = {
+                id: testUserId,
+                settings: { ownerName: 'Test User', factoryName: 'Test Factory' },
+                employees: [],
+                stock: [],
+                inward: [],
+                outward: [],
+                activity: [],
+                attendance: {},
+                payroll_runs: [],
+                email: 'test@example.com',
+                updated_at: new Date().toISOString()
+            };
+            
+            try {
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .insert(testRecord)
+                    .select();
+                
+                if (error) {
+                    addResult('error', 'Test 4: Insert Failed', error.message, error);
+                } else {
+                    addResult('success', 'Test 4: Insert Successful', 'Test record inserted successfully', data);
+                }
+            } catch (error) {
+                addResult('error', 'Test 4: Unexpected Error', error.message, error);
+            }
+
+            // Test 5: Test Select Operation
+            addResult('loading', 'Test 5: Testing Select Operation', 'Attempting to retrieve the test record...');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .select('*')
+                    .eq('id', testUserId)
+                    .single();
+                
+                if (error) {
+                    addResult('error', 'Test 5: Select Failed', error.message, error);
+                } else {
+                    addResult('success', 'Test 5: Select Successful', 'Test record retrieved successfully', data);
+                }
+            } catch (error) {
+                addResult('error', 'Test 5: Unexpected Error', error.message, error);
+            }
+
+            // Test 6: Test Update Operation
+            addResult('loading', 'Test 6: Testing Update Operation', 'Attempting to update the test record...');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .update({ 
+                        settings: { ...testRecord.settings, factoryName: 'Updated Test Factory' },
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', testUserId)
+                    .select();
+                
+                if (error) {
+                    addResult('error', 'Test 6: Update Failed', error.message, error);
+                } else {
+                    addResult('success', 'Test 6: Update Successful', 'Test record updated successfully', data);
+                }
+            } catch (error) {
+                addResult('error', 'Test 6: Unexpected Error', error.message, error);
+            }
+
+            // Test 7: Test Delete Operation (cleanup)
+            addResult('loading', 'Test 7: Testing Delete Operation (Cleanup)', 'Attempting to delete the test record...');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .delete()
+                    .eq('id', testUserId)
+                    .select();
+                
+                if (error) {
+                    addResult('error', 'Test 7: Delete Failed', error.message, error);
+                } else {
+                    addResult('success', 'Test 7: Delete Successful', 'Test record deleted successfully', data);
+                }
+            } catch (error) {
+                addResult('error', 'Test 7: Unexpected Error', error.message, error);
+            }
+
+            // Test 8: Check RLS Policies
+            addResult('loading', 'Test 8: Checking RLS Policies', 'Testing if Row Level Security allows anonymous access...');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('factory_data')
+                    .select('count', { count: 'exact', head: true });
+                
+                if (error) {
+                    if (error.code === '42501' || error.message.includes('policy')) {
+                        addResult('error', 'Test 8: RLS Policy Restriction', 'Row Level Security is blocking anonymous access. You may need to adjust RLS policies or use authenticated requests.', error);
+                    } else {
+                        addResult('error', 'Test 8: RLS Check Failed', error.message, error);
+                    }
+                } else {
+                    addResult('success', 'Test 8: RLS Check Passed', 'Anonymous access is allowed or RLS policies are properly configured', { count: data });
+                }
+            } catch (error) {
+                addResult('error', 'Test 8: Unexpected Error', error.message, error);
+            }
+
+            testBtn.disabled = false;
+        }
+
+        window.runTests = runTests;
+    </script>
+</body>
+</html>

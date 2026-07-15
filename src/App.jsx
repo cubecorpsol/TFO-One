@@ -41,7 +41,7 @@ const translations = {
     synced: "Synced",
     offline: "Offline",
     home: "Home",
-    stock: "Edit",
+    Edit: "Edit",
     stockTab: "Stock",
     staff: "Staff",
     payroll: "Payroll",
@@ -49,7 +49,7 @@ const translations = {
     settings: "Settings",
     welcome: "Welcome",
     week: "Week",
-    totalStock: "Total Stock",
+    totalStock: "Modify",
     employees: "Employees",
     weeklyPay: "Weekly Pay",
     production: "Production",
@@ -155,7 +155,7 @@ const translations = {
     supplierName: "Supplier Name",
     purchaseDate: "Purchase Date",
     stockNotes: "Notes",
-    saveStock: "Stock",
+    saveStock: "Save",
     deleteStock: "Delete",
     confirmDeleteStock: "Are you sure you want to delete this stock?",
     viewDetails: "View Details",
@@ -925,17 +925,16 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('Auth state changed:', _event);
       setSession(session);
-      if (session) {
-        if (_event === 'INITIAL_SESSION' || _event === 'SIGNED_IN') {
-          setCloudStatus('syncing');
-          loadDataFromCloud(session.user.id, session.user.email);
-        }
-      } else {
-        setCloudStatus('offline');
-        setScreen('auth');
-        setIsInitialLoadComplete(true);
-      }
-    });
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+    setCloudStatus('syncing');
+    loadDataFromCloud(session.user.id, session.user.email);
+  } else if (event === 'TOKEN_REFRESHED') {
+    setCloudStatus('synced'); // just refresh token, don't reload/overwrite local data
+  } else if (!session) {
+    setCloudStatus('offline');
+    setScreen('auth');
+  }
+});
 
     return () => {
       subscription.unsubscribe();
@@ -2220,12 +2219,12 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             {/* Quick Actions 2x2 */}
             <div className="grid-2x2">
-              <div className="action-card" onClick={() => setBottomSheeInward}>
+              <div className="action-card" onClick={() => setBottomSheet('inward')}>
                 <div className="action-icon"><i className="ti ti-package-import"></i></div>
                 <span className="action-title">Yarn Inward</span>
                 <span className="action-subtitle">Add Inward</span>
               </div>
-              <div className="action-card" onClick={() => setBottomSheeOutward}>
+              <div className="action-card" onClick={() => setBottomSheet('outward')}>
                 <div className="action-icon"><i className="ti ti-package-export"></i></div>
                 <span className="action-title">Yarn Outward</span>
                 <span className="action-subtitle">Add Outward</span>
@@ -2423,9 +2422,9 @@ create policy "Users can insert own factory data." on public.factory_data for in
             <i className="ti ti-home-2"></i>
             <span>Home</span>
           </button>
-          <button className={`nav-tab ${screen === 'stock' ? 'active' : ''}`} onClick={() => navigateTo('stock')}>
+          <button className={`nav-tab ${screen === 'Edit' ? 'active' : ''}`} onClick={() => navigateTo('stock')}>
             <i className="ti ti-package"></i>
-            <span>Stock</span>
+            <span>Edit</span>
           </button>
           <button className={`nav-tab ${screen === 'staff' || screen === 'employee_profile' ? 'active' : ''}`} onClick={() => navigateTo('staff')}>
             <i className="ti ti-users"></i>
@@ -2810,7 +2809,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
               <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={(e) => {
                 e.preventDefault();
                 saveStockEdit(true);
-              }}>Remove</button>
+              }}>{t('remove')}</button>
             </div>
           </div>
         </div>
@@ -2821,7 +2820,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
           <div className="bottom-sheet-drag-handle"></div>
           <div className="bottom-sheet-header">
-            <span className="bottom-sheet-title">Edit Payroll</span>
+            <span className="bottom-sheet-title">{t('editPayroll')}</span>
             <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setBottomSheet(null)}><i className="ti ti-plus"></i></button>
           </div>
           <div className="text-left">
@@ -2832,24 +2831,24 @@ create policy "Users can insert own factory data." on public.factory_data for in
             <div className="form-group">
               <label>
                 {db.employees.find(e => e.id === selectedPayrollEmpId)?.payType === 'production'
-                  ? "Bags Produced"
+                  ? t('bagsProduced')
                   : "Shifts Worked"}
               </label>
               <input type="number" value={editPayrollUnits} onChange={(e) => setEditPayrollUnits(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>Rate (₹)</label>
+              <label>{t('rate')} (₹)</label>
               <input type="number" value={editPayrollRate} onChange={(e) => setEditPayrollRate(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>Advance Deduction (₹)</label>
+              <label>{t('advanceDeduction')} (₹)</label>
               <input type="number" value={editPayrollAdvance} onChange={(e) => setEditPayrollAdvance(e.target.value)} />
             </div>
 
             <div className="form-group">
-              <label>Net Pay (Total KG (Auto-calculated))</label>
+              <label>{t('netPay')} (Total KG (Auto-calculated))</label>
               <input type="text" disabled style={{ fontWeight: 'bold', backgroundColor: '#faf6f0' }} value={"₹" + Math.max(0, (parseFloat(editPayrollUnits) || 0) * (parseFloat(editPayrollRate) || 0) - (parseFloat(editPayrollAdvance) || 0))} />
             </div>
 
@@ -2869,7 +2868,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
           <p className="dialog-message">{confirmModal.message}</p>
           <div className="dialog-buttons">
             <button className="btn btn-secondary" onClick={() => setConfirmModal(prev => ({ ...prev, visible: false }))}>
-              Cancel
+              {t('cancel')}
             </button>
             <button className="btn btn-primary" onClick={confirmModal.action}>
               {confirmModal.buttonText || 'Save'}
@@ -3205,8 +3204,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteStock = () => {
     setConfirmModal({
       visible: true,
-      title: "Delete Stock",
-      message: "Confirm delete stock?",
+      title: t('deleteStock'),
+      message: t('confirmDeleteStock'),
       action: () => {
         const updatedStock = db.stock.filter(s => s.id !== selectedStock.id);
         setDb(prev => ({ ...prev, stock: updatedStock }));
@@ -3300,8 +3299,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteEmployee = () => {
     setConfirmModal({
       visible: true,
-      title: "Delete Employee",
-      message: "Confirm delete employee?",
+      title: t('deleteEmployee'),
+      message: t('confirmDeleteEmployee'),
       action: () => {
         const updatedEmployees = db.employees.filter(e => e.id !== selectedEmployee.id);
         setDb(prev => ({ ...prev, employees: updatedEmployees }));
@@ -3377,8 +3376,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteYarn = () => {
     setConfirmModal({
       visible: true,
-      title: "Delete Yarn",
-      message: "Confirm delete yarn?",
+      title: t('deleteYarn'),
+      message: t('confirmDeleteYarn'),
       action: () => {
         const updatedYarn = db.yarn.filter(y => y.id !== selectedYarn.id);
         setDb(prev => ({ ...prev, yarn: updatedYarn }));
@@ -3433,8 +3432,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteInward = () => {
     setConfirmModal({
       visible: true,
-      title: "Delete Inward Entry",
-      message: "Confirm delete inward entry?",
+      title: t('deleteInwardEntry'),
+      message: t('confirmDeleteInward'),
       action: () => {
         const updatedInward = db.inward.filter(item => item.id !== selectedInward.id);
         setDb(prev => ({ ...prev, inward: updatedInward }));
@@ -3486,8 +3485,8 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const deleteOutward = () => {
     setConfirmModal({
       visible: true,
-      title: "Delete Outward Entry",
-      message: "Confirm delete outward entry?",
+      title: t('deleteOutwardEntry'),
+      message: t('confirmDeleteOutward'),
       action: () => {
         const updatedOutward = db.outward.filter(item => item.id !== selectedOutward.id);
         setDb(prev => ({ ...prev, outward: updatedOutward }));
@@ -3502,16 +3501,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
     <div className="view-panel">
       <div className="flex-row-center">
         <div className="text-left">
-          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>Total Stock</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>{t('totalStock')}</span>
           <h1 style={{ fontSize: '24px', margin: '2px 0 0 0' }}>{totalStockKg.toFixed(1)} KG</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>{totalStockBags} Bags in Warehouse</p>
         </div>
         <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => {
           if (activeTab === 'stock') handleAddStock();
           else if (activeTab === 'employees') handleAddEmployee();
-          else setBottomSheeInward;
+          else setBottomSheet('inward');
         }}>
-          <i className="ti ti-plus"></i> Add
+          <i className="ti ti-plus"></i> {t('add')}
         </button>
       </div>
 
@@ -3519,7 +3518,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
       <div className="mt-12" style={{ position: 'relative' }}>
         <input
           type="text"
-          placeholder="Search..."
+          placeholder={t('searchPlaceholder')}
           value={searchTerm}
           onChange={(e) => handleSearchChange(e.target.value)}
           onFocus={() => searchTerm.length > 0 && setShowSearchSuggestions(true)}
@@ -3575,19 +3574,19 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           onChange={(e) => setSortBy(e.target.value)}
           style={{ padding: '6px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: '600' }}
         >
-          <option value="name">Sort by Name</option>
-          <option value="dateCreated">Sort by Date Created</option>
-          <option value="lastUpdated">Sort by Last Updated</option>
-          <option value="quantity">Sort by Quantity</option>
+          <option value="name">{t('sortByName')}</option>
+          <option value="dateCreated">{t('sortByDateCreated')}</option>
+          <option value="lastUpdated">{t('sortByLastUpdated')}</option>
+          <option value="quantity">{t('sortByQuantity')}</option>
         </select>
       </div>
 
       {/* Tabs */}
       <div className="tabs-header mt-12">
-        <button className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => setActiveTab('stock')}>Stock</button>
-        <button className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>Employees</button>
-        <button className={`tab-btn ${activeTab === 'inward' ? 'active' : ''}`} onClick={() => setActiveTab('inward')}>Inward</button>
-        <button className={`tab-btn ${activeTab === 'outward' ? 'active' : ''}`} onClick={() => setActiveTab('outward')}>Outward</button>
+        <button className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => setActiveTab('stock')}>{t('stockTab')}</button>
+        <button className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>{t('employeesTab')}</button>
+        <button className={`tab-btn ${activeTab === 'inward' ? 'active' : ''}`} onClick={() => setActiveTab('inward')}>{t('inward')}</button>
+        <button className={`tab-btn ${activeTab === 'outward' ? 'active' : ''}`} onClick={() => setActiveTab('outward')}>{t('outward')}</button>
       </div>
 
       {/* Stock Tab */}
@@ -3596,7 +3595,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           {filteredItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               <i className="ti ti-package" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
-              <p>No items found</p>
+              <p>{t('emptyState')}</p>
             </div>
           ) : (
             <div className="stock-list">
@@ -3625,7 +3624,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           {filteredItems.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
               <i className="ti ti-users" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
-              <p>No items found</p>
+              <p>{t('emptyState')}</p>
             </div>
           ) : (
             filteredItems.map(emp => (
@@ -3664,7 +3663,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
             >
               <div className="history-header">
                 <span className="history-party">{item.supplier}</span>
-                <span className="history-badge inward">Inward</span>
+                <span className="history-badge inward">{t('inward')}</span>
               </div>
               <div className="history-details">
                 <span>{item.color} · {item.bags} bags</span>
@@ -3691,7 +3690,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
             >
               <div className="history-header">
                 <span className="history-party">{item.partyName}</span>
-                <span className="history-badge outward">Outward</span>
+                <span className="history-badge outward">{t('outward')}</span>
               </div>
               <div className="history-details">
                 <span>{item.color} · {item.bags} bags</span>
@@ -3708,7 +3707,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Recent Activity */}
       <div className="card mt-16">
-        <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>Recent Activity</h3>
+        <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>{t('recentActivity')}</h3>
         <div className="activity-feed">
           {db.activity.slice(0, 5).map((item, idx) => {
             let icon = "ti ti-info-circle";
@@ -3721,12 +3720,12 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
             let activityText = item.text;
             if (item.data) {
               if (item.type === 'inward') {
-                activityText = `Received ${item.data.bags} Bags ${item.data.color} from ${item.data.supplier}`;
+                activityText = `${t('received')} ${item.data.bags} Bags ${item.data.color} ${t('from')} ${item.data.supplier}`;
               } else if (item.type === 'outward') {
-                activityText = `Dispatched ${item.data.bags} Bags ${item.data.color} to ${item.data.party}`;
+                activityText = `${t('dispatched')} ${item.data.bags} Bags ${item.data.color} ${t('to')} ${item.data.party}`;
               } else if (item.data.type) {
-                const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
-                activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
+                const actionText = item.type.includes('Added') ? t('added') : item.type.includes('Updated') ? t('updated') : t('deleted');
+                activityText = `${t(item.data.type)} ${actionText}: ${item.data.name}`;
               }
             }
 
@@ -3752,16 +3751,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         <div className="dialog-overlay active" onClick={() => setShowStockModal(false)}>
           <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingStock ? 'Add Stock' : 'View Details'}
+              {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label>Stock Name</label>
+                <label>{t('stockName')}</label>
                 <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
               </div>
               <div className="form-row">
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>Yarn Type</label>
+                  <label>{t('yarnType')}</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -3810,7 +3809,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                   )}
                 </div>
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>Color</label>
+                  <label>{t('color')}</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -3861,36 +3860,36 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Lot Number</label>
+                  <label>{t('lotNumber')}</label>
                   <input type="text" value={stockForm.lotNumber} onChange={(e) => setStockForm({...stockForm, lotNumber: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>Number of Bags</label>
+                  <label>{t('numBags')}</label>
                   <input type="number" value={stockForm.numBags} onChange={(e) => setStockForm({...stockForm, numBags: e.target.value})} />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Weight Per Bag (KG)</label>
+                  <label>{t('weightPerBag')}</label>
                   <input type="number" step="0.001" value={stockForm.weightPerBag} onChange={(e) => setStockForm({...stockForm, weightPerBag: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>Total Weight (KG)</label>
+                  <label>{t('totalWeight')}</label>
                   <input type="number" step="0.001" value={stockForm.totalWeight} onChange={(e) => setStockForm({...stockForm, totalWeight: e.target.value})} />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Purchase Price (₹)</label>
+                  <label>{t('purchasePrice')}</label>
                   <input type="number" value={stockForm.purchasePrice} onChange={(e) => setStockForm({...stockForm, purchasePrice: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>Purchase Date</label>
+                  <label>{t('purchaseDate')}</label>
                   <input type="date" value={stockForm.purchaseDate} onChange={(e) => setStockForm({...stockForm, purchaseDate: e.target.value})} />
                 </div>
               </div>
               <div className="form-group" style={{ position: 'relative' }}>
-                <label>Supplier Name</label>
+                <label>{t('supplierName')}</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <input 
                     type="text" 
@@ -3939,15 +3938,15 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 )}
               </div>
               <div className="form-group">
-                <label>Stock Notes</label>
+                <label>{t('stockNotes')}</label>
                 <textarea value={stockForm.notes} onChange={(e) => setStockForm({...stockForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>{t('cancel')}</button>
                 {!isAddingStock && (
-                  <button type="button" className="btn btn-danger" onClick={deleteStock}>Delete Stock</button>
+                  <button type="button" className="btn btn-danger" onClick={deleteStock}>{t('deleteStock')}</button>
                 )}
-                <button type="button" className="btn btn-primary" onClick={saveStock}>Save Stock</button>
+                <button type="button" className="btn btn-primary" onClick={saveStock}>{t('saveStock')}</button>
               </div>
             </div>
           </div>
@@ -3959,16 +3958,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         <div className="dialog-overlay active" onClick={() => setShowEmployeeModal(false)}>
           <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingEmployee ? 'Add Employee' : 'View Details'}
+              {isAddingEmployee ? 'Add Employee' : t('viewDetails')}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
-                <label>Employee Name</label>
+                <label>{t('employeeName')}</label>
                 <input type="text" value={employeeForm.fullName} onChange={(e) => setEmployeeForm({...employeeForm, fullName: e.target.value})} />
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Employee ID</label>
+                  <label>{t('employeeId')}</label>
                   <input type="text" value={employeeForm.employeeId} onChange={(e) => setEmployeeForm({...employeeForm, employeeId: e.target.value})} disabled={!isAddingEmployee} />
                 </div>
                 <div className="form-group">
@@ -3977,7 +3976,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 </div>
               </div>
               <div className="form-group">
-                <label>Email</label>
+                <label>{t('email')}</label>
                 <input type="email" value={employeeForm.email} onChange={(e) => setEmployeeForm({...employeeForm, email: e.target.value})} />
               </div>
               <div className="form-group">
@@ -3986,7 +3985,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
               </div>
               <div className="form-row">
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>Designation</label>
+                  <label>{t('designation')}</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -4035,7 +4034,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                   )}
                 </div>
                 <div className="form-group" style={{ position: 'relative' }}>
-                  <label>Department</label>
+                  <label>{t('department')}</label>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="text" 
@@ -4090,23 +4089,23 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                   <input type="date" value={employeeForm.joiningDate} onChange={(e) => setEmployeeForm({...employeeForm, joiningDate: e.target.value})} />
                 </div>
                 <div className="form-group">
-                  <label>Salary (₹)</label>
+                  <label>{t('salary')}</label>
                   <input type="number" value={employeeForm.salary} onChange={(e) => setEmployeeForm({...employeeForm, salary: e.target.value})} />
                 </div>
               </div>
               <div className="form-group">
-                <label>Status</label>
+                <label>{t('employeeStatus')}</label>
                 <select value={employeeForm.status} onChange={(e) => setEmployeeForm({...employeeForm, status: e.target.value})}>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{Cancel}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
                 {!isAddingEmployee && (
-                  <button type="button" className="btn btn-danger" onClick={deleteEmployee}>Delete Employee</button>
+                  <button type="button" className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
                 )}
-                <button type="button" className="btn btn-primary" onClick={saveEmployee}>Save Employee</button>
+                <button type="button" className="btn btn-primary" onClick={saveEmployee}>{t('saveEmployee')}</button>
               </div>
             </div>
           </div>
@@ -4244,7 +4243,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{Cancel}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteInward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveInward}>Save</button>
               </div>
@@ -4335,7 +4334,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <input type="number" step="0.001" value={outwardForm.totalKg} onChange={(e) => setOutwardForm({...outwardForm, totalKg: e.target.value})} />
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{Cancel}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteOutward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveOutward}>Save</button>
               </div>
@@ -4365,20 +4364,20 @@ function StaffPage({ db, t, lang, setBottomSheet, setActiveEmployeeId, navigateT
     <div className="view-panel">
       <div className="flex-row-center">
         <div className="text-left">
-          <h1 style={{ fontSize: '24px', margin: '0' }}>Employees</h1>
+          <h1 style={{ fontSize: '24px', margin: '0' }}>{t('employees')}</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>
-            {totalStaffCount} Employees · {activeStaffToday} Active Today
+            {totalStaffCount} {t('employees')} · {activeStaffToday} {t('activeToday')}
           </p>
         </div>
         <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => setBottomSheet('add_employee')}>
-          <i className="ti ti-plus"></i> Add
+          <i className="ti ti-plus"></i> {t('add')}
         </button>
       </div>
 
       <div className="mt-12" style={{ position: 'relative' }}>
         <input
           type="text"
-          placeholder="Search employees..."
+          placeholder={t('searchEmployeePlaceholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ width: '100%', padding: '10px 12px 10px 36px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', outline: 'none' }}
@@ -4387,7 +4386,7 @@ function StaffPage({ db, t, lang, setBottomSheet, setActiveEmployeeId, navigateT
       </div>
 
       <div className="tabs-header mt-12">
-        <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>All</button>
+        <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>{t('all')}</button>
         <button className={`tab-btn ${activeTab === 'morning' ? 'active' : ''}`} onClick={() => setActiveTab('morning')}>Morning</button>
         <button className={`tab-btn ${activeTab === 'night' ? 'active' : ''}`} onClick={() => setActiveTab('night')}>Night</button>
       </div>
@@ -4465,26 +4464,26 @@ function EmployeeProfile({ emp, t, lang, startEditEmployee, removeEmployee, navi
 
         {/* Personal Details */}
         <div className="card text-left">
-          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>Personal Details</h3>
+          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>{t('personalDetails')}</h3>
           <div className="profile-info-row"><span className="summary-label">Mobile Number</span><span className="summary-value">{emp.phone}</span></div>
           <div className="profile-info-row"><span className="summary-label">Aadhaar</span><span className="summary-value">{emp.aadhaar}</span></div>
-          <div className="profile-info-row"><span className="summary-label">Date of Birth</span><span className="summary-value">{emp.dob || "1994-08-12"}</span></div>
+          <div className="profile-info-row"><span className="summary-label">{t('dob')}</span><span className="summary-value">{emp.dob || "1994-08-12"}</span></div>
           <div className="profile-info-row"><span className="summary-label">Joining Date</span><span className="summary-value">{emp.joiningDate}</span></div>
           <div className="profile-info-row"><span className="summary-label">Address</span><span className="summary-value">{emp.address}</span></div>
         </div>
 
         {/* Salary details */}
         <div className="card text-left">
-          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>Salary Info</h3>
-          <div className="profile-info-row"><span className="summary-label">Pay Type</span><span className="summary-value" style={{ textTransform: 'capitalize' }}>{emp.payType === 'production' ? 'Piece Rate (Bags)' : 'Daily Wages'}</span></div>
+          <h3 style={{ fontSize: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', color: 'var(--accent-terracotta)' }}>{t('salaryInfo')}</h3>
+          <div className="profile-info-row"><span className="summary-label">Pay Type</span><span className="summary-value" style={{ textTransform: 'capitalize' }}>{emp.payType === 'production' ? t('pieceRateBags') : t('dailyWages')}</span></div>
           <div className="profile-info-row"><span className="summary-label">{emp.payType === 'production' ? 'Rate per Bag' : 'Rate per Shift'}</span><span className="summary-value">₹{emp.rate}</span></div>
-          <div className="profile-info-row"><span className="summary-label">Advance Deduction</span><span className="summary-value">₹150</span></div>
+          <div className="profile-info-row"><span className="summary-label">{t('advanceDeduction')}</span><span className="summary-value">₹150</span></div>
         </div>
 
         {/* Weekly Attendance 7 days grid */}
         <div className="card text-left">
           <div className="flex-row-center" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-            <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>This Week's Attendance</h3>
+            <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>{t('thisWeekAttendance')}</h3>
             <button className="btn-text" style={{ padding: '0', minHeight: 'auto' }} onClick={() => setBottomSheet('attendance')}>Save</button>
           </div>
           <div className="attendance-grid">
@@ -4556,7 +4555,7 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
   return (
     <div className="view-panel">
       <div className="text-left">
-        <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>Payroll | Week {getWeekNumber()}</span>
+        <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700' }}>{t('payroll')} | Week {getWeekNumber()}</span>
         <h1 style={{ fontSize: '24px', margin: '2px 0 0 0' }}>₹{totals.netTotal.toFixed(2)}</h1>
         <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>Wages payable to staff</p>
       </div>
@@ -4564,24 +4563,24 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
       {/* Summary box */}
       <div className="card grid-2x2 text-left">
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span className="stat-label">Payable</span>
+          <span className="stat-label">{t('payable')}</span>
           <span className="stat-value" style={{ fontSize: '18px' }}>₹{totals.netTotal}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span className="stat-label">Advances</span>
+          <span className="stat-label">{t('advances')}</span>
           <span className="stat-value" style={{ fontSize: '18px' }}>₹{totals.advanceTotal}</span>
         </div>
       </div>
 
       <div className="tabs-header mt-8">
-        <button className={`tab-btn ${payrollType === 'production' ? 'active' : ''}`} onClick={() => setPayrollType('production')}>Bag Production</button>
-        <button className={`tab-btn ${payrollType === 'shift' ? 'active' : ''}`} onClick={() => setPayrollType('shift')}>Shift Wise</button>
+        <button className={`tab-btn ${payrollType === 'production' ? 'active' : ''}`} onClick={() => setPayrollType('production')}>{t('bagProduction')}</button>
+        <button className={`tab-btn ${payrollType === 'shift' ? 'active' : ''}`} onClick={() => setPayrollType('shift')}>{t('shiftWise')}</button>
       </div>
 
       <div className="card text-left" style={{ border: '1px dashed var(--accent-terracotta)', backgroundColor: 'rgba(27, 43, 107, 0.04)' }}>
-        <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>Start Payroll</h3>
-        <p style={{ fontSize: '12px', margin: '4px 0 8px 0', fontWeight: '600' }}>Compile active staff records for this week</p>
-        <button className="btn btn-primary" style={{ padding: '8px 12px', minHeight: '36px', width: 'auto' }} onClick={handleStartPayroll}>Run Weekly Ledger</button>
+        <h3 style={{ fontSize: '14px', color: 'var(--accent-terracotta)' }}>{t('startPayroll')}</h3>
+        <p style={{ fontSize: '12px', margin: '4px 0 8px 0', fontWeight: '600' }}>{t('compileActiveRecords')}</p>
+        <button className="btn btn-primary" style={{ padding: '8px 12px', minHeight: '36px', width: 'auto' }} onClick={handleStartPayroll}>{t('runWeeklyLedger')}</button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} className="mt-8">
@@ -4613,7 +4612,7 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
           <i className="ti ti-printer"></i> Print Statement
         </button>
         <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('PDF downloaded'); window.print(); }}>
-          <i className="ti ti-download"></i> Download PDF
+          <i className="ti ti-download"></i> {t('downloadPDF')}
         </button>
       </div>
     </div>
@@ -4629,7 +4628,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
     <div className="view-panel">
       <div className="flex-row-center">
         <div className="text-left">
-          <h1 style={{ fontSize: '24px', margin: '0' }}>Reports</h1>
+          <h1 style={{ fontSize: '24px', margin: '0' }}>{t('reports')}</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>Download statistics ledger statements</p>
         </div>
         <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => window.print()}>
@@ -4641,10 +4640,10 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
       <div className="card text-left">
         <span className="stat-label">Select Date Scope</span>
         <div className="tabs-header mt-8" style={{ borderBottom: 'none' }}>
-          <button className={`tab-btn ${reportRange === 'today' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('today')}>Today</button>
+          <button className={`tab-btn ${reportRange === 'today' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('today')}>{t('today')}</button>
           <button className={`tab-btn ${reportRange === '1week' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('1week')}>1 Week</button>
           <button className={`tab-btn ${reportRange === '1month' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('1month')}>1 Month</button>
-          <button className={`tab-btn ${reportRange === 'custom' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('custom')}>Custom</button>
+          <button className={`tab-btn ${reportRange === 'custom' ? 'active' : ''}`} style={{ fontSize: '12px', padding: '6px 2px' }} onClick={() => setReportRange('custom')}>{t('customDate')}</button>
         </div>
 
         {reportRange === 'custom' && (
@@ -4667,7 +4666,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-package"></i></div>
             <div className="report-details">
-              <span className="report-title">Stock Report</span>
+              <span className="report-title">{t('stockReport')}</span>
               <span className="report-subtitle">Current stock details ({totalStockKg.toFixed(1)} KG)</span>
             </div>
           </div>
@@ -4678,7 +4677,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-cash"></i></div>
             <div className="report-details">
-              <span className="report-title">Payroll Report</span>
+              <span className="report-title">{t('payrollReport')}</span>
               <span className="report-subtitle">Staff wages breakdown (Week total: ₹{weeklyWagesSum})</span>
             </div>
           </div>
@@ -4689,7 +4688,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-users"></i></div>
             <div className="report-details">
-              <span className="report-title">Employee Report</span>
+              <span className="report-title">{t('employeeReport')}</span>
               <span className="report-subtitle">Attendance lists & roll sheets history</span>
             </div>
           </div>
@@ -4700,7 +4699,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-chart-arrows"></i></div>
             <div className="report-details">
-              <span className="report-title">Production Summary Report</span>
+              <span className="report-title">{t('prodSummaryReport')}</span>
               <span className="report-subtitle">Production inward/outward flow (Today: {productionTodayKg} KG)</span>
             </div>
           </div>
@@ -4710,7 +4709,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
 
       {/* Supplier Section summary */}
       <div className="card text-left mt-8">
-        <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>Suppliers Section</h3>
+        <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>{t('suppliersSection')}</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} className="mt-12">
           {Object.entries(supplierDeliveries).map(([name, obj]) => (
             <div className="list-row" key={name}>
@@ -4856,7 +4855,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           )}
         </div>
         <div className="settings-profile-info">
-          <h2 className="settings-profile-owner">{db.settings.factoryName || 'Factory'}</h2>
+          <h2 className="settings-profile-owner">{db.settings.factoryName || t('factory')}</h2>
           {db.settings.email && (
             <p className="settings-profile-email" style={{ fontSize: '13px', opacity: 0.7, margin: '2px 0 4px 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <i className="ti ti-mail" style={{ fontSize: '14px' }}></i>
@@ -4881,7 +4880,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('factory')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-building-factory-2 section-icon"></i>
-              <span>Factory Settings</span>
+              <span>{t('factorySettings')}</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'factory' ? 'rotate' : ''}`}></i>
           </div>
@@ -4889,29 +4888,29 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
             <div className="settings-accordion-content text-left">
               <form onSubmit={saveSettings} style={{ marginTop: '12px' }}>
                 <div className="form-group">
-                  <label>Factory Name</label>
+                  <label>{t('factoryNameLabel')}</label>
                   <input type="text" value={facName} onChange={(e) => setFacName(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>Owner Name</label>
+                  <label>{t('ownerNameLabel')}</label>
                   <input type="text" value={facOwner} onChange={(e) => setFacOwner(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>Factory Address</label>
+                  <label>{t('factoryAddressLabel')}</label>
                   <input type="text" value={facAddress} onChange={(e) => setFacAddress(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>Phone Contact</label>
+                  <label>{t('phoneContact')}</label>
                   <input type="tel" value={facPhone} onChange={(e) => setFacPhone(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>Current Location</label>
+                  <label>{t('currentLocation')}</label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input 
                       type="text" 
                       value={facLocation} 
                       onChange={(e) => setFacLocation(e.target.value)} 
-                      placeholder="Coordinates"
+                      placeholder={t('coordinates')}
                       readOnly
                       style={{ flex: 1 }}
                     />
@@ -4921,22 +4920,22 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
                       onClick={handleGetCurrentLocation}
                       style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }}
                     >
-                      <i className="ti ti-map-pin"></i> Get Location
+                      <i className="ti ti-map-pin"></i> {t('getLocation')}
                     </button>
                   </div>
                 </div>
 
                 {/* Logo Upload inside Factory Settings */}
                 <div className="form-group">
-                  <label>Factory Logo</label>
+                  <label>{t('factoryLogo')}</label>
                   <div className="logo-upload-container">
                     {db.settings.logo ? (
                       <div className="logo-preview-row">
                         <img src={db.settings.logo} className="logo-preview-img" alt="Logo Preview" />
                         <div className="logo-actions">
-                          <span style={{ fontSize: '13px', fontWeight: 'bold' }}>Logo Active</span>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{t('logoActive')}</span>
                           <button type="button" className="logo-action-btn-small danger" onClick={handleRemoveLogo}>
-                            Remove Logo
+                            {t('removeLogo')}
                           </button>
                         </div>
                       </div>
@@ -4944,7 +4943,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
                       <div>
                         <input type="file" accept="image/*" id="logo-file-input" style={{ display: 'none' }} onChange={handleLogoUpload} />
                         <button type="button" className="btn btn-secondary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => document.getElementById('logo-file-input').click()}>
-                          <i className="ti ti-upload"></i> Upload Logo
+                          <i className="ti ti-upload"></i> {t('uploadLogo')}
                         </button>
                       </div>
                     )}
@@ -4962,7 +4961,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('notifications')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-bell section-icon"></i>
-              <span>Notifications</span>
+              <span>{t('notifications')}</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'notifications' ? 'rotate' : ''}`}></i>
           </div>
@@ -4971,8 +4970,8 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
               <div className="toggle-settings-list">
                 <div className="toggle-settings-row">
                   <div className="toggle-settings-label">
-                    <span className="toggle-title">Reminders</span>
-                    <span className="toggle-desc">Payroll reminders and alerts</span>
+                    <span className="toggle-title">{t('reminders')}</span>
+                    <span className="toggle-desc">{t('remindersDesc')}</span>
                   </div>
                   <label className="switch">
                     <input type="checkbox" checked={payReminders} onChange={() => handleToggleNotification('payrollReminders', payReminders)} />
@@ -4989,7 +4988,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('language')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-language section-icon"></i>
-              <span>Language Selection</span>
+              <span>{t('languageSelection')}</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'language' ? 'rotate' : ''}`}></i>
           </div>
@@ -5018,7 +5017,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
           <div className="settings-accordion-header" onClick={() => toggleSection('data')}>
             <div className="settings-accordion-title-left">
               <i className="ti ti-database section-icon"></i>
-              <span>Data & Backup</span>
+              <span>{t('dataAndBackup')}</span>
             </div>
             <i className={`ti ti-chevron-right chevron ${expandedSection === 'data' ? 'rotate' : ''}`}></i>
           </div>
@@ -5029,18 +5028,18 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
                   <div className="data-action-left">
                     <i className="ti ti-cloud-upload"></i>
                     <div className="data-action-text">
-                      <span className="data-action-title">Sync Now</span>
+                      <span className="data-action-title">{t('syncNow')}</span>
                       <span className="data-action-desc">Cloud Sync Status: Active</span>
                     </div>
                   </div>
-                  <span className="badge-sync online" style={{ minHeight: 'auto' }}>Synced</span>
+                  <span className="badge-sync online" style={{ minHeight: 'auto' }}>{t('synced')}</span>
                 </div>
 
                 <div className="data-action-row" onClick={exportAllData}>
                   <div className="data-action-left">
                     <i className="ti ti-file-export"></i>
                     <div className="data-action-text">
-                      <span className="data-action-title">Export Data</span>
+                      <span className="data-action-title">{t('exportData')}</span>
                       <span className="data-action-desc">Download complete database as JSON file</span>
                     </div>
                   </div>
@@ -5068,9 +5067,9 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
       <div className="card settings-logout-card" onClick={() => {
         setConfirmModal({
           visible: true,
-          title: "Logout",
-          message: "Are you sure you want to logout?",
-          buttonText: "Confirm Logout",
+          title: t('logout'),
+          message: t('confirmLogout'),
+          buttonText: t('confirmLogoutButton'),
           action: () => {
             handleLogout();
             setConfirmModal(prev => ({ ...prev, visible: false }));
@@ -5079,7 +5078,7 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
       }}>
         <div className="settings-row-logout">
           <i className="ti ti-logout"></i>
-          <span>Logout</span>
+          <span>{t('logout')}</span>
         </div>
       </div>
 

@@ -70,6 +70,7 @@ export const upsertFactoryData = async (userId, payload, email) => {
     settings: payload.settings,
     employees: payload.employees || [],
     stock: payload.stock || [],
+    yarn: payload.yarn || [],
     inward: payload.inward || [],
     outward: payload.outward || [],
     activity: payload.activity || [],
