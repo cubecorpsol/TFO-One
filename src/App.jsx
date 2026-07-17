@@ -922,7 +922,7 @@ export default function App() {
     });
 
     // Listen to auth state changes (OAuth redirect, sign-out, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state changed:', _event);
       setSession(session);
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
@@ -3748,12 +3748,17 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Stock Details Modal */}
       {showStockModal && (
-        <div className="dialog-overlay active" onClick={() => setShowStockModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="fullscreen-page-overlay active">
+    <div className="fullscreen-page-header">
+      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>
+        {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
+      </h3>
+      <button className="fullscreen-close-btn" onClick={() => setShowStockModal(false)}>
+        <i className="ti ti-x"></i>
+      </button>
+    </div>
+    <div className="fullscreen-page-content">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>{t('stockName')}</label>
                 <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
@@ -3955,12 +3960,17 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Employee Details Modal */}
       {showEmployeeModal && (
-        <div className="dialog-overlay active" onClick={() => setShowEmployeeModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingEmployee ? 'Add Employee' : t('viewDetails')}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="fullscreen-page-overlay active">
+    <div className="fullscreen-page-header">
+      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>
+        {isAddingEmployee ? 'Add Employee' : t('viewDetails')}
+      </h3>
+      <button className="fullscreen-close-btn" onClick={() => setShowEmployeeModal(false)}>
+        <i className="ti ti-x"></i>
+      </button>
+    </div>
+    <div className="fullscreen-page-content">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>{t('employeeName')}</label>
                 <input type="text" value={employeeForm.fullName} onChange={(e) => setEmployeeForm({...employeeForm, fullName: e.target.value})} />
@@ -4101,7 +4111,6 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 </select>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
                 {!isAddingEmployee && (
                   <button type="button" className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
                 )}
@@ -4114,10 +4123,15 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Inward Edit Modal */}
       {showInwardModal && (
-        <div className="dialog-overlay active" onClick={() => setShowInwardModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Edit Inward Entry</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="fullscreen-page-overlay active">
+    <div className="fullscreen-page-header">
+      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>Edit Inward Entry</h3>
+      <button className="fullscreen-close-btn" onClick={() => setShowInwardModal(false)}>
+        <i className="ti ti-x"></i>
+      </button>
+    </div>
+    <div className="fullscreen-page-content">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>ID</label>
                 <input type="text" value={inwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
@@ -4243,7 +4257,6 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteInward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveInward}>Save</button>
               </div>
@@ -4254,10 +4267,15 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Outward Edit Modal */}
       {showOutwardModal && (
-        <div className="dialog-overlay active" onClick={() => setShowOutwardModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Edit Outward Entry</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="fullscreen-page-overlay active">
+    <div className="fullscreen-page-header">
+      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>Edit Outward Entry</h3>
+      <button className="fullscreen-close-btn" onClick={() => setShowOutwardModal(false)}>
+        <i className="ti ti-x"></i>
+      </button>
+    </div>
+    <div className="fullscreen-page-content">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>ID</label>
                 <input type="text" value={outwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
@@ -4334,7 +4352,6 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <input type="number" step="0.001" value={outwardForm.totalKg} onChange={(e) => setOutwardForm({...outwardForm, totalKg: e.target.value})} />
               </div>
               <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteOutward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveOutward}>Save</button>
               </div>
@@ -4623,6 +4640,18 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
 // COMPONENT: REPORTS GENERATOR SUBPAGE
 // ==========================================
 function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate, setCustomFromDate, customToDate, setCustomToDate, supplierDeliveries, totalStockKg, totalStockBags, weeklyWagesSum, productionTodayKg }) {
+  const [printingReport, setPrintingReport] = useState(null); // 'stock' | 'payroll' | 'employee' | 'production'
+
+  const handlePrintReport = (type) => {
+    setPrintingReport(type);
+    setTimeout(() => window.print(), 150); // let it render before printing
+  };
+
+  useEffect(() => {
+    const clearAfterPrint = () => setPrintingReport(null);
+    window.addEventListener('afterprint', clearAfterPrint);
+    return () => window.removeEventListener('afterprint', clearAfterPrint);
+  }, []);
 
   return (
     <div className="view-panel">
@@ -4662,7 +4691,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
 
       {/* Main reports categories */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} className="mt-8">
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handlePrintReport('stock')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-package"></i></div>
             <div className="report-details">
@@ -4673,7 +4702,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handlePrintReport('payroll')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-cash"></i></div>
             <div className="report-details">
@@ -4684,7 +4713,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handlePrintReport('employee')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-users"></i></div>
             <div className="report-details">
@@ -4695,7 +4724,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handlePrintReport('production')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-chart-arrows"></i></div>
             <div className="report-details">
@@ -4722,9 +4751,149 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           ))}
         </div>
       </div>
+      {printingReport && (
+        <div id="printable-report" style={{ display: 'none' }}>
+          <div style={{ display: 'block' }}>
+            <h2>
+              {printingReport === 'stock' && t('stockReport')}
+              {printingReport === 'payroll' && t('payrollReport')}
+              {printingReport === 'employee' && t('employeeReport')}
+              {printingReport === 'production' && t('prodSummaryReport')}
+            </h2>
+            <p style={{ color: '#666', fontSize: '13px' }}>Generated: {new Date().toLocaleString()}</p>
+            <hr />
+
+            {printingReport === 'stock' && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '16px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
+                    <th style={{ padding: '6px' }}>Stock Name</th>
+                    <th style={{ padding: '6px' }}>Color</th>
+                    <th style={{ padding: '6px' }}>Bags</th>
+                    <th style={{ padding: '6px' }}>KG</th>
+                    <th style={{ padding: '6px' }}>Lot No.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {db.stock.map(s => (
+                    <tr key={s.id} style={{ borderBottom: '1px solid #ddd' }}>
+                      <td style={{ padding: '6px' }}>{s.stockName}</td>
+                      <td style={{ padding: '6px' }}>{s.color}</td>
+                      <td style={{ padding: '6px' }}>{s.bags}</td>
+                      <td style={{ padding: '6px' }}>{s.kg}</td>
+                      <td style={{ padding: '6px' }}>{s.lotNumber}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
+                    <td style={{ padding: '6px' }} colSpan="2">Total</td>
+                    <td style={{ padding: '6px' }}>{totalStockBags}</td>
+                    <td style={{ padding: '6px' }}>{totalStockKg.toFixed(1)} KG</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+
+            {printingReport === 'payroll' && (
+              db.payrollRuns.length > 0 ? (
+                <div>
+                  <p><strong>Week {db.payrollRuns[0].week} — {db.payrollRuns[0].month}</strong></p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '12px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
+                        <th style={{ padding: '6px' }}>Employee</th>
+                        <th style={{ padding: '6px' }}>Pay Type</th>
+                        <th style={{ padding: '6px' }}>Rate</th>
+                        <th style={{ padding: '6px' }}>Units</th>
+                        <th style={{ padding: '6px' }}>Gross Pay</th>
+                        <th style={{ padding: '6px' }}>Advance</th>
+                        <th style={{ padding: '6px' }}>Net Pay</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {db.payrollRuns[0].details.map((d, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
+                          <td style={{ padding: '6px' }}>{d.employeeName}</td>
+                          <td style={{ padding: '6px' }}>{d.payType}</td>
+                          <td style={{ padding: '6px' }}>₹{d.rate}</td>
+                          <td style={{ padding: '6px' }}>{d.units}</td>
+                          <td style={{ padding: '6px' }}>₹{d.grossPay}</td>
+                          <td style={{ padding: '6px' }}>₹{d.advanceDeduction}</td>
+                          <td style={{ padding: '6px' }}>₹{d.netPay}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
+                        <td colSpan="6" style={{ padding: '6px' }}>Total Payable</td>
+                        <td style={{ padding: '6px' }}>₹{db.payrollRuns[0].totalPayable}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <p>No payroll has been run yet. Go to Payroll → Start Weekly Payroll to generate one.</p>
+              )
+            )}
+
+            {printingReport === 'employee' && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '16px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
+                    <th style={{ padding: '6px' }}>Employee</th>
+                    <th style={{ padding: '6px' }}>ID</th>
+                    <th style={{ padding: '6px' }}>Shift</th>
+                    <th style={{ padding: '6px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {db.employees.map(emp => (
+                    <tr key={emp.id} style={{ borderBottom: '1px solid #ddd' }}>
+                      <td style={{ padding: '6px' }}>{emp.name}</td>
+                      <td style={{ padding: '6px' }}>{emp.id}</td>
+                      <td style={{ padding: '6px' }}>{emp.shift}</td>
+                      <td style={{ padding: '6px' }}>{emp.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {printingReport === 'production' && (
+              <div>
+                <p><strong>Today's Production: {productionTodayKg} KG</strong></p>
+                <h4 style={{ marginTop: '16px' }}>Inward</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
+                      <th style={{ padding: '6px' }}>Date</th>
+                      <th style={{ padding: '6px' }}>Supplier</th>
+                      <th style={{ padding: '6px' }}>Bags</th>
+                      <th style={{ padding: '6px' }}>KG</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {db.inward.map((inw, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
+                        <td style={{ padding: '6px' }}>{inw.date}</td>
+                        <td style={{ padding: '6px' }}>{inw.supplier}</td>
+                        <td style={{ padding: '6px' }}>{inw.bags}</td>
+                        <td style={{ padding: '6px' }}>{inw.totalKg}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ==========================================
 // COMPONENT: SETTINGS DASHBOARD SUBPAGE
