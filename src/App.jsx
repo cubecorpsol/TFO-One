@@ -7,8 +7,12 @@ import {
   signUpUser,
   signOutUser,
   fetchFactoryData,
-  upsertFactoryData
+  upsertFactoryData,
+  signInWithGoogleNative
 } from './supabase';
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { saveToDB, loadFromDB } from './indexedDB.js';
 import { PushNotifications } from '@capacitor/push-notifications';
 
@@ -1144,43 +1148,48 @@ export default function App() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (!isSupabaseConfigured()) {
-      // Mock sign-in (Local Mode)
-      if (!db.settings.onboardingComplete) {
-        // Fresh slate for new local users
-        setDb({
-          settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
-          employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
-        });
-        localStorage.removeItem('tfo_db');
-        sessionStorage.removeItem('tfo_db');
-        navigateTo('onboarding');
-        setOnboardingStep(1);
-      } else {
-        navigateTo('home');
-        showToast('Saved successfully');
-      }
-      return;
+  if (!isSupabaseConfigured()) {
+    // Mock sign-in (Local Mode)
+    if (!db.settings.onboardingComplete) {
+      setDb({
+        settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
+        employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
+      });
+      localStorage.removeItem('tfo_db');
+      sessionStorage.removeItem('tfo_db');
+      navigateTo('onboarding');
+      setOnboardingStep(1);
+    } else {
+      navigateTo('home');
+      showToast('Saved successfully');
     }
+    return;
+  }
 
-    try {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      // Native Android/iOS app — open Google sign-in in system browser
+      await signInWithGoogleNative();
+    } else {
+      // Regular web browser — existing flow
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
           queryParams: {
-            prompt: 'select_account', // Force account selection on mobile
-            access_type: 'offline' // Get refresh token for better persistence
+            prompt: 'select_account',
+            access_type: 'offline'
           },
-          skipBrowserRedirect: false // Ensure proper redirect handling
+          skipBrowserRedirect: false
         }
       });
       if (error) throw error;
-    } catch (err) {
-      console.error(err);
-      showToast(err.message, "error");
     }
-  };
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, "error");
+  }
+};
 
   const handleLogout = async () => {
     if (isSupabaseConfigured() && session) {
@@ -1292,6 +1301,33 @@ export default function App() {
 
     setupPushNotifications();
   }, []);
+  
+  // Handle Google OAuth redirect back into native app
+useEffect(() => {
+  if (!Capacitor.isNativePlatform()) return;
+
+  const listener = CapacitorApp.addListener('appUrlOpen', async (event) => {
+    if (event.url.includes('auth-callback')) {
+      await Browser.close();
+      try {
+        const hashPart = event.url.split('#')[1] || '';
+        const params = new URLSearchParams(hashPart);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token });
+        }
+      } catch (err) {
+        console.error('OAuth redirect handling error:', err);
+        showToast('Sign-in failed, please try again', 'error');
+      }
+    }
+  });
+
+  return () => {
+    listener.remove();
+  };
+}, []);
 
   // Utility to fire toast notification
   const showToast = (message, type = 'success') => {

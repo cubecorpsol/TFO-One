@@ -1,10 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
+
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export const isSupabaseConfigured = () => {
   return supabaseUrl.trim() !== '' && supabaseAnonKey.trim() !== '';
+};
+
+export const signInWithGoogleNative = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'com.yourcompany.tfoone://auth-callback',
+      skipBrowserRedirect: true
+    }
+  });
+  if (error) throw error;
+  if (data?.url) {
+    await Browser.open({ url: data.url });
+  }
 };
 
 export const supabase = isSupabaseConfigured()
