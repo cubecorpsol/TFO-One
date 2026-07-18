@@ -811,6 +811,17 @@ export default function App() {
 
   // Local Database State with IndexedDB as primary storage
   const [db, setDb] = useState(() => {
+    // Only auto-restore from IndexedDB in local/demo mode.
+    // In Supabase mode, loadDataFromCloud() below is the single source of truth —
+    // letting IndexedDB resolve independently can overwrite fresh cloud data with stale local data.
+    if (!isSupabaseConfigured()) {
+      loadFromDB().then(data => {
+        if (data?.settings?.onboardingComplete) {
+          setDb(data);
+        }
+      }).catch(() => {});
+    }
+
     if (isSupabaseConfigured()) {
       // Supabase mode: try localStorage cache first (fast restore for returning users)
       const local = localStorage.getItem('tfo_db');
@@ -829,14 +840,6 @@ export default function App() {
         employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
       };
     }
-
-    // --- Local / Demo mode (no Supabase) ---
-    // Try IndexedDB first
-    loadFromDB().then(data => {
-      if (data?.settings?.onboardingComplete) {
-        setDb(data);
-      }
-    }).catch(() => {});
 
     // Fallback to localStorage
     const local = localStorage.getItem('tfo_db');
@@ -927,13 +930,13 @@ export default function App() {
 
     // Listen to auth state changes (OAuth redirect, sign-out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', _event);
+      console.log('Auth state changed:', event);
       setSession(session);
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
     setCloudStatus('syncing');
     loadDataFromCloud(session.user.id, session.user.email);
-  } else if (event === 'TOKEN_REFRESHED') {
-    setCloudStatus('synced'); // just refresh token, don't reload/overwrite local data
+  } else if (event === 'TOKEN_REFRESHED' && session) {
+    setCloudStatus('synced');
   } else if (!session) {
     setCloudStatus('offline');
     setScreen('auth');
@@ -1034,7 +1037,8 @@ export default function App() {
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
-      setCloudStatus('synced');
+      setCloudStatus('offline');
+      showToast('Failed to load your data from cloud: ' + (err.message || 'Unknown error'), 'error');
       navigateTo('home');
     } finally {
       setIsSyncing(false);
@@ -1301,7 +1305,7 @@ export default function App() {
 
     setupPushNotifications();
   }, []);
-  
+
   // Handle Google OAuth redirect back into native app
 useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
