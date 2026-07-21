@@ -57,30 +57,18 @@ export const signOutUser = async () => {
 // Sync helpers
 export const fetchFactoryData = async (userId) => {
   if (!supabase) throw new Error("Supabase is not configured.");
-  console.log('fetchFactoryData: Fetching data for user:', userId);
   const { data, error } = await supabase
     .from('factory_data')
     .select('*')
     .eq('id', userId)
     .single();
 
-  console.log('fetchFactoryData: Response data:', data);
-  console.log('fetchFactoryData: Response error:', error);
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-    throw error;
-  }
+  if (error && error.code !== 'PGRST116') throw error;
   return data;
 };
 
 export const upsertFactoryData = async (userId, payload, email) => {
   if (!supabase) throw new Error("Supabase is not configured.");
-  
-  console.log('upsertFactoryData: Preparing to save data for user:', userId);
-  console.log('upsertFactoryData: Payload employees count:', payload.employees?.length);
-  console.log('upsertFactoryData: Payload stock count:', payload.stock?.length);
-  console.log('upsertFactoryData: Payload inward count:', payload.inward?.length);
-  console.log('upsertFactoryData: Payload outward count:', payload.outward?.length);
   
   const record = {
     id: userId,
@@ -96,25 +84,12 @@ export const upsertFactoryData = async (userId, payload, email) => {
     updated_at: new Date().toISOString()
   };
 
-  // Add email if provided or present in settings
   const userEmail = email || payload.settings?.email;
   if (userEmail) {
     record.email = userEmail;
   }
-
-  console.log('upsertFactoryData: Record to save:', record);
   
-  const { error, data } = await supabase
-    .from('factory_data')
-    .upsert(record);
+  const { error } = await supabase.from('factory_data').upsert(record);
 
-  console.log('upsertFactoryData: Response data:', data);
-  console.log('upsertFactoryData: Response error:', error);
-
-  if (error) {
-    console.error('upsertFactoryData: Error saving data:', error);
-    throw error;
-  }
-  
-  console.log('upsertFactoryData: Data saved successfully');
+  if (error) throw error;
 };

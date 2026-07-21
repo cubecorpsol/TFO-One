@@ -812,42 +812,13 @@ export default function App() {
   // Local Database State with IndexedDB as primary storage
   const [db, setDb] = useState(() => {
     // Only auto-restore from IndexedDB in local/demo mode.
-    // In Supabase mode, loadDataFromCloud() below is the single source of truth —
-    // letting IndexedDB resolve independently can overwrite fresh cloud data with stale local data.
+    // In Supabase mode, loadDataFromCloud() below is the single source of truth
     if (!isSupabaseConfigured()) {
       loadFromDB().then(data => {
         if (data?.settings?.onboardingComplete) {
           setDb(data);
         }
       }).catch(() => {});
-    }
-
-    if (isSupabaseConfigured()) {
-      // Supabase mode: try localStorage cache first (fast restore for returning users)
-      const local = localStorage.getItem('tfo_db');
-      if (local) {
-        try {
-          const parsed = JSON.parse(local);
-          // Only restore if the user has completed onboarding (real data, not defaults)
-          if (parsed?.settings?.onboardingComplete) {
-            return parsed;
-          }
-        } catch (e) { /* ignore */ }
-      }
-      // Brand-new or no valid cache — start completely empty
-      return {
-        settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', email: '', onboardingComplete: false },
-        employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
-      };
-    }
-
-    // Fallback to localStorage
-    const local = localStorage.getItem('tfo_db');
-    if (local) {
-      try {
-        const parsed = JSON.parse(local);
-        if (parsed?.settings?.onboardingComplete) return parsed;
-      } catch (e) { /* ignore */ }
     }
 
     // Demo defaults
@@ -1028,9 +999,6 @@ export default function App() {
             payrollRuns: []
           };
           setDb(freshDb);
-          // Clear localStorage so stale default data doesn't survive a page refresh
-          localStorage.removeItem('tfo_db');
-          sessionStorage.removeItem('tfo_db');
           navigateTo('onboarding');
           setOnboardingStep(1);
         }
@@ -1062,61 +1030,31 @@ export default function App() {
         console.log("Waiting for cloud data...");
         return;
     }
-    console.log('useEffect triggered - saving to IndexedDB and localStorage');
-    const dbString = JSON.stringify(db);
-    
-    // Save to IndexedDB (primary storage)
+    console.log('useEffect triggered - saving to IndexedDB');
     saveToDB(db).then(() => {
       console.log('IndexedDB saved successfully');
     }).catch(err => {
       console.error('IndexedDB save error:', err);
     });
-    
-    // Save to localStorage as backup
-    localStorage.setItem('tfo_db', dbString);
-    
-    // Save to sessionStorage as additional backup
-    sessionStorage.setItem('tfo_db', dbString);
-    
-    console.log('Storage saved. Current db state:', {
-      employeesCount: db.employees?.length,
-      stockCount: db.stock?.length,
-      inwardCount: db.inward?.length,
-      outwardCount: db.outward?.length
-    });
-    console.log('localStorage verification:', localStorage.getItem('tfo_db')?.substring(0, 100));
-    console.log('sessionStorage verification:', sessionStorage.getItem('tfo_db')?.substring(0, 100));
 
     if (!isSupabaseConfigured() || !session) {
       if (!isSupabaseConfigured() && session) {
         console.warn("Supabase not configured - data only saved locally");
-        showToast('Supabase not configured - check environment variables', 'error');
       }
       return;
     }
 
-    const delayDebounceFn = setTimeout(async () => {
-      setCloudStatus('syncing');
-      console.log('Attempting to sync data to cloud for user:', session.user.id);
-      console.log('Syncing db state:', {
-        employeesCount: db.employees?.length,
-        stockCount: db.stock?.length,
-        inwardCount: db.inward?.length,
-        outwardCount: db.outward?.length
-      });
-      try {
-        await upsertFactoryData(session.user.id, db, session.user.email);
+    setCloudStatus('syncing');
+    console.log('Syncing data to cloud for user:', session.user.id);
+    upsertFactoryData(session.user.id, db, session.user.email)
+      .then(() => {
         setCloudStatus('synced');
-        console.log("Data synced to cloud successfully");
-        showToast('Data saved to cloud', 'success');
-      } catch (err) {
-        console.error("Auto sync error:", err);
+        console.log("Data synced to cloud");
+      })
+      .catch((err) => {
+        console.error("Sync error:", err);
         setCloudStatus('offline');
-        showToast('Failed to connect to cloud: ' + (err.message || 'Unknown error'), 'error');
-      }
-    }, 300); // Debounce sync by 300ms
-
-    return () => clearTimeout(delayDebounceFn);
+      });
   }, [db, session, isInitialLoadComplete]);
 
   const handleEmailAuth = async (e) => {
@@ -1159,8 +1097,6 @@ export default function App() {
         settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
         employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
       });
-      localStorage.removeItem('tfo_db');
-      sessionStorage.removeItem('tfo_db');
       navigateTo('onboarding');
       setOnboardingStep(1);
     } else {
@@ -1205,7 +1141,6 @@ export default function App() {
       }
     }
     setSession(null);
-    localStorage.removeItem('tfo_db');
     setDb({
       settings: DEFAULT_FACTORY_SETTINGS,
       employees: DEFAULT_EMPLOYEES,
