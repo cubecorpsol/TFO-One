@@ -7,12 +7,8 @@ import {
   signUpUser,
   signOutUser,
   fetchFactoryData,
-  upsertFactoryData,
-  signInWithGoogleNative
+  upsertFactoryData
 } from './supabase';
-import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
-import { App as CapacitorApp } from '@capacitor/app';
 import { saveToDB, loadFromDB } from './indexedDB.js';
 import { PushNotifications } from '@capacitor/push-notifications';
 
@@ -45,7 +41,7 @@ const translations = {
     synced: "Synced",
     offline: "Offline",
     home: "Home",
-    Edit: "Edit",
+    stock: "Edit",
     stockTab: "Stock",
     staff: "Staff",
     payroll: "Payroll",
@@ -53,7 +49,7 @@ const translations = {
     settings: "Settings",
     welcome: "Welcome",
     week: "Week",
-    totalStock: "Modify",
+    totalStock: "Total Stock",
     employees: "Employees",
     weeklyPay: "Weekly Pay",
     production: "Production",
@@ -159,7 +155,7 @@ const translations = {
     supplierName: "Supplier Name",
     purchaseDate: "Purchase Date",
     stockNotes: "Notes",
-    saveStock: "Save",
+    saveStock: "Stock",
     deleteStock: "Delete",
     confirmDeleteStock: "Are you sure you want to delete this stock?",
     viewDetails: "View Details",
@@ -811,14 +807,32 @@ export default function App() {
 
   // Local Database State with IndexedDB as primary storage
   const [db, setDb] = useState(() => {
-    // Only auto-restore from IndexedDB in local/demo mode.
-    // In Supabase mode, loadDataFromCloud() below is the single source of truth
-    if (!isSupabaseConfigured()) {
-      loadFromDB().then(data => {
-        if (data?.settings?.onboardingComplete) {
-          setDb(data);
-        }
-      }).catch(() => {});
+    if (isSupabaseConfigured()) {
+      // Supabase mode: do NOT trust a global cache here — which user it
+      // belongs to isn't known yet. Always start empty; loadDataFromCloud()
+      // (triggered by the auth effect right after mount) is the sole source
+      // of truth once the session/user is known.
+      return {
+        settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', email: '', onboardingComplete: false },
+        employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
+      };
+    }
+
+    // --- Local / Demo mode (no Supabase) ---
+    // Try IndexedDB first
+    loadFromDB().then(data => {
+      if (data?.settings?.onboardingComplete) {
+        setDb(data);
+      }
+    }).catch(() => {});
+
+    // Fallback to localStorage
+    const local = localStorage.getItem('tfo_db');
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (parsed?.settings?.onboardingComplete) return parsed;
+      } catch (e) { /* ignore */ }
     }
 
     // Demo defaults
@@ -868,7 +882,6 @@ export default function App() {
     if (!isSupabaseConfigured()) {
       setCloudStatus('local');
       // No Supabase — stay on auth screen (already set as initial state)
-      setIsInitialLoadComplete(true);
       return;
     }
 
@@ -877,7 +890,6 @@ export default function App() {
       console.warn('Auth check timed out, showing auth screen');
       setScreen('auth');
       setCloudStatus('offline');
-      setIsInitialLoadComplete(true);
     }, 6000);
 
     // Get initial session
@@ -890,29 +902,25 @@ export default function App() {
       } else {
         setCloudStatus('offline');
         setScreen('auth');
-        setIsInitialLoadComplete(true);
       }
     }).catch(() => {
       clearTimeout(authTimeout);
       setCloudStatus('offline');
       setScreen('auth');
-      setIsInitialLoadComplete(true);
     });
 
     // Listen to auth state changes (OAuth redirect, sign-out, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state changed:', _event);
       setSession(session);
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-    setCloudStatus('syncing');
-    loadDataFromCloud(session.user.id, session.user.email);
-  } else if (event === 'TOKEN_REFRESHED' && session) {
-    setCloudStatus('synced');
-  } else if (!session) {
-    setCloudStatus('offline');
-    setScreen('auth');
-  }
-});
+      if (session) {
+        setCloudStatus('syncing');
+        loadDataFromCloud(session.user.id, session.user.email);
+      } else {
+        setCloudStatus('offline');
+        setScreen('auth');
+      }
+    });
 
     return () => {
       subscription.unsubscribe();
@@ -948,69 +956,58 @@ export default function App() {
         setCloudStatus('synced');
         // If the user completed onboarding before → home; else → onboarding
         if (data.settings?.onboardingComplete) {
-          setScreen(prev => (prev === 'loading' || prev === 'auth' ? 'home' : prev));
-          setBottomSheet(null);
+          navigateTo('home');
         } else {
           console.log('Cloud user has not completed onboarding, going to onboarding');
-          setScreen(prev => (prev === 'loading' || prev === 'auth' ? 'onboarding' : prev));
-          setBottomSheet(null);
-          setOnboardingStep(1);
-        }
-      } else {
-        // No cloud record at all — this is a brand-new user.
-        // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
-        let completedLocally = false;
-        try {
-          const localData = localStorage.getItem('tfo_db');
-          if (localData) {
-            const parsed = JSON.parse(localData);
-            completedLocally = !!parsed?.settings?.onboardingComplete;
-          }
-        } catch (e) {
-          console.error('Error parsing localStorage:', e);
-        }
-
-        setCloudStatus('synced');
-        if (completedLocally) {
-          console.log('Onboarding completed locally, going to home');
-          setScreen(prev => (prev === 'loading' || prev === 'auth' ? 'home' : prev));
-          setBottomSheet(null);
-        } else {
-          // Brand-new user — wipe default mock data and start completely fresh
-          console.log('New user — clearing mock data and going to onboarding');
-          const freshDb = {
-            settings: {
-              ownerName: '',
-              factoryName: '',
-              phone: '',
-              whatsapp: '',
-              address: '',
-              logo: '',
-              email: userEmail || '',
-              onboardingComplete: false
-            },
-            employees: [],
-            stock: [],
-            yarn: [],
-            inward: [],
-            outward: [],
-            activity: [],
-            attendance: {},
-            payrollRuns: []
-          };
-          setDb(freshDb);
           navigateTo('onboarding');
           setOnboardingStep(1);
         }
+      } else {
+        // No cloud record at all — this is a brand-new user
+        setCloudStatus('synced');
+        // Brand-new user — start completely fresh
+        console.log('New user — going to onboarding');
+        const freshDb = {
+          settings: {
+            ownerName: '',
+            factoryName: '',
+            phone: '',
+            whatsapp: '',
+            address: '',
+            logo: '',
+            email: userEmail || '',
+            onboardingComplete: false
+          },
+          employees: [],
+          stock: [],
+          yarn: [],
+          inward: [],
+          outward: [],
+          activity: [],
+          attendance: {},
+          payrollRuns: []
+        };
+        setDb(freshDb);
+        navigateTo('onboarding');
+        setOnboardingStep(1);
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
+      // Do NOT reset db and do NOT mark load complete — either would risk
+      // the auto-sync effect pushing wrong/empty data to this user's cloud
+      // row. Show a retry screen and let the user explicitly retry.
       setCloudStatus('offline');
-      showToast('Failed to load your data from cloud: ' + (err.message || 'Unknown error'), 'error');
-      navigateTo('home');
+      setDbError('fetch_failed');
+      showToast('Could not reach cloud. Please check your connection.', 'error');
     } finally {
       setIsSyncing(false);
-      setIsInitialLoadComplete(true);
+    }
+  };
+
+  const retryLoadDataFromCloud = () => {
+    if (session) {
+      setDbError(null);
+      loadDataFromCloud(session.user.id, session.user.email);
     }
   };
 
@@ -1090,49 +1087,55 @@ export default function App() {
   };
 
   const handleGoogleSignIn = async () => {
-  if (!isSupabaseConfigured()) {
-    // Mock sign-in (Local Mode)
-    if (!db.settings.onboardingComplete) {
-      setDb({
-        settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
-        employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
-      });
-      navigateTo('onboarding');
-      setOnboardingStep(1);
-    } else {
-      navigateTo('home');
-      showToast('Saved successfully');
+    if (!isSupabaseConfigured()) {
+      // Mock sign-in (Local Mode)
+      if (!db.settings.onboardingComplete) {
+        // Fresh slate for new local users
+        setDb({
+          settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
+          employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
+        });
+        navigateTo('onboarding');
+        setOnboardingStep(1);
+      } else {
+        navigateTo('home');
+        showToast('Saved successfully');
+      }
+      return;
     }
-    return;
-  }
 
-  try {
-    if (Capacitor.isNativePlatform()) {
-      // Native Android/iOS app — open Google sign-in in system browser
-      await signInWithGoogleNative();
-    } else {
-      // Regular web browser — existing flow
+    try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: "https://tfoone.cubecorpsol.com",
           queryParams: {
-            prompt: 'select_account',
-            access_type: 'offline'
+            prompt: 'select_account', // Force account selection on mobile
+            access_type: 'offline' // Get refresh token for better persistence
           },
-          skipBrowserRedirect: false
+          skipBrowserRedirect: false // Ensure proper redirect handling
         }
       });
       if (error) throw error;
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, "error");
     }
-  } catch (err) {
-    console.error(err);
-    showToast(err.message, "error");
-  }
-};
+  };
 
   const handleLogout = async () => {
     if (isSupabaseConfigured() && session) {
+      // Flush any pending (debounced) unsynced changes BEFORE signing out,
+      // otherwise edits made in the last 2 seconds are lost forever.
+      try {
+        setCloudStatus('syncing');
+        await upsertFactoryData(session.user.id, db, session.user.email);
+        console.log('Final sync before logout complete');
+      } catch (err) {
+        console.error('Final sync before logout failed:', err);
+        showToast('Warning: last changes may not have synced', 'error');
+      }
+
       try {
         await signOutUser();
         showToast('Logged out from cloud');
@@ -1141,6 +1144,8 @@ export default function App() {
       }
     }
     setSession(null);
+    localStorage.removeItem('tfo_db');
+    sessionStorage.removeItem('tfo_db');
     setDb({
       settings: DEFAULT_FACTORY_SETTINGS,
       employees: DEFAULT_EMPLOYEES,
@@ -1240,33 +1245,6 @@ export default function App() {
 
     setupPushNotifications();
   }, []);
-
-  // Handle Google OAuth redirect back into native app
-useEffect(() => {
-  if (!Capacitor.isNativePlatform()) return;
-
-  const listener = CapacitorApp.addListener('appUrlOpen', async (event) => {
-    if (event.url.includes('auth-callback')) {
-      await Browser.close();
-      try {
-        const hashPart = event.url.split('#')[1] || '';
-        const params = new URLSearchParams(hashPart);
-        const access_token = params.get('access_token');
-        const refresh_token = params.get('refresh_token');
-        if (access_token && refresh_token) {
-          await supabase.auth.setSession({ access_token, refresh_token });
-        }
-      } catch (err) {
-        console.error('OAuth redirect handling error:', err);
-        showToast('Sign-in failed, please try again', 'error');
-      }
-    }
-  });
-
-  return () => {
-    listener.remove();
-  };
-}, []);
 
   // Utility to fire toast notification
   const showToast = (message, type = 'success') => {
@@ -1461,7 +1439,7 @@ useEffect(() => {
 
     // Update Stock List color-wise
     let updatedStock = [...db.stock];
-    const stockIdx = updatedStock.findIndex(item => (item.color || '').toLowerCase() === (inwardColor || '').toLowerCase());
+    const stockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === inwardColor.toLowerCase());
     if (stockIdx > -1) {
       updatedStock[stockIdx].kg += calculatedTotalKg;
       updatedStock[stockIdx].bags += bagsCount;
@@ -1970,12 +1948,34 @@ useEffect(() => {
       <main className="app-content">
 
         {/* 0. LOADING / SPLASH SCREEN */}
-        {screen === 'loading' && (
+        {screen === 'loading' && dbError !== 'fetch_failed' && (
           <div className="loading-splash">
             <div className="loading-splash-inner">
               <img src={logo} alt="TFO One" className="loading-splash-logo" />
               <div className="loading-spinner-ring"></div>
               <p className="loading-splash-text">Loading your workspace…</p>
+            </div>
+          </div>
+        )}
+
+        {/* 0b. CLOUD FETCH FAILED — retry screen (never proceed with unknown/stale data) */}
+        {dbError === 'fetch_failed' && !isInitialLoadComplete && (
+          <div className="loading-splash">
+            <div className="loading-splash-inner">
+              <img src={logo} alt="TFO One" className="loading-splash-logo" />
+              <p className="loading-splash-text" style={{ color: '#ef4444', fontWeight: 600 }}>
+                Couldn't reach the cloud
+              </p>
+              <p className="loading-splash-text" style={{ fontSize: '13px' }}>
+                Check your internet connection, then try again.
+              </p>
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: '16px' }}
+                onClick={retryLoadDataFromCloud}
+              >
+                Retry
+              </button>
             </div>
           </div>
         )}
@@ -2397,9 +2397,9 @@ create policy "Users can insert own factory data." on public.factory_data for in
             <i className="ti ti-home-2"></i>
             <span>Home</span>
           </button>
-          <button className={`nav-tab ${screen === 'Edit' ? 'active' : ''}`} onClick={() => navigateTo('stock')}>
+          <button className={`nav-tab ${screen === 'stock' ? 'active' : ''}`} onClick={() => navigateTo('stock')}>
             <i className="ti ti-package"></i>
-            <span>Edit</span>
+            <span>Stock</span>
           </button>
           <button className={`nav-tab ${screen === 'staff' || screen === 'employee_profile' ? 'active' : ''}`} onClick={() => navigateTo('staff')}>
             <i className="ti ti-users"></i>
@@ -3723,17 +3723,12 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Stock Details Modal */}
       {showStockModal && (
-        <div className="fullscreen-page-overlay active">
-    <div className="fullscreen-page-header">
-      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>
-        {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
-      </h3>
-      <button className="fullscreen-close-btn" onClick={() => setShowStockModal(false)}>
-        <i className="ti ti-x"></i>
-      </button>
-    </div>
-    <div className="fullscreen-page-content">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="dialog-overlay active" onClick={() => setShowStockModal(false)}>
+          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
+              {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>{t('stockName')}</label>
                 <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
@@ -3935,17 +3930,12 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Employee Details Modal */}
       {showEmployeeModal && (
-        <div className="fullscreen-page-overlay active">
-    <div className="fullscreen-page-header">
-      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>
-        {isAddingEmployee ? 'Add Employee' : t('viewDetails')}
-      </h3>
-      <button className="fullscreen-close-btn" onClick={() => setShowEmployeeModal(false)}>
-        <i className="ti ti-x"></i>
-      </button>
-    </div>
-    <div className="fullscreen-page-content">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="dialog-overlay active" onClick={() => setShowEmployeeModal(false)}>
+          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
+              {isAddingEmployee ? 'Add Employee' : t('viewDetails')}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>{t('employeeName')}</label>
                 <input type="text" value={employeeForm.fullName} onChange={(e) => setEmployeeForm({...employeeForm, fullName: e.target.value})} />
@@ -4086,6 +4076,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 </select>
               </div>
               <div className="dialog-buttons">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
                 {!isAddingEmployee && (
                   <button type="button" className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
                 )}
@@ -4098,15 +4089,10 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Inward Edit Modal */}
       {showInwardModal && (
-        <div className="fullscreen-page-overlay active">
-    <div className="fullscreen-page-header">
-      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>Edit Inward Entry</h3>
-      <button className="fullscreen-close-btn" onClick={() => setShowInwardModal(false)}>
-        <i className="ti ti-x"></i>
-      </button>
-    </div>
-    <div className="fullscreen-page-content">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="dialog-overlay active" onClick={() => setShowInwardModal(false)}>
+          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Edit Inward Entry</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>ID</label>
                 <input type="text" value={inwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
@@ -4232,6 +4218,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
               </div>
               <div className="dialog-buttons">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteInward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveInward}>Save</button>
               </div>
@@ -4242,15 +4229,10 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Outward Edit Modal */}
       {showOutwardModal && (
-        <div className="fullscreen-page-overlay active">
-    <div className="fullscreen-page-header">
-      <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>Edit Outward Entry</h3>
-      <button className="fullscreen-close-btn" onClick={() => setShowOutwardModal(false)}>
-        <i className="ti ti-x"></i>
-      </button>
-    </div>
-    <div className="fullscreen-page-content">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="dialog-overlay active" onClick={() => setShowOutwardModal(false)}>
+          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Edit Outward Entry</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>ID</label>
                 <input type="text" value={outwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
@@ -4327,6 +4309,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 <input type="number" step="0.001" value={outwardForm.totalKg} onChange={(e) => setOutwardForm({...outwardForm, totalKg: e.target.value})} />
               </div>
               <div className="dialog-buttons">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
                 <button type="button" className="btn btn-danger" onClick={deleteOutward}>Delete</button>
                 <button type="button" className="btn btn-primary" onClick={saveOutward}>Save</button>
               </div>
@@ -4615,18 +4598,6 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
 // COMPONENT: REPORTS GENERATOR SUBPAGE
 // ==========================================
 function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate, setCustomFromDate, customToDate, setCustomToDate, supplierDeliveries, totalStockKg, totalStockBags, weeklyWagesSum, productionTodayKg }) {
-  const [printingReport, setPrintingReport] = useState(null); // 'stock' | 'payroll' | 'employee' | 'production'
-
-  const handlePrintReport = (type) => {
-    setPrintingReport(type);
-    setTimeout(() => window.print(), 150); // let it render before printing
-  };
-
-  useEffect(() => {
-    const clearAfterPrint = () => setPrintingReport(null);
-    window.addEventListener('afterprint', clearAfterPrint);
-    return () => window.removeEventListener('afterprint', clearAfterPrint);
-  }, []);
 
   return (
     <div className="view-panel">
@@ -4666,7 +4637,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
 
       {/* Main reports categories */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} className="mt-8">
-        <div className="report-card text-left" onClick={() => handlePrintReport('stock')}>
+        <div className="report-card text-left" onClick={() => window.print()}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-package"></i></div>
             <div className="report-details">
@@ -4677,7 +4648,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => handlePrintReport('payroll')}>
+        <div className="report-card text-left" onClick={() => window.print()}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-cash"></i></div>
             <div className="report-details">
@@ -4688,7 +4659,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => handlePrintReport('employee')}>
+        <div className="report-card text-left" onClick={() => window.print()}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-users"></i></div>
             <div className="report-details">
@@ -4699,7 +4670,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => handlePrintReport('production')}>
+        <div className="report-card text-left" onClick={() => window.print()}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-chart-arrows"></i></div>
             <div className="report-details">
@@ -4726,149 +4697,9 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           ))}
         </div>
       </div>
-      {printingReport && (
-        <div id="printable-report" style={{ display: 'none' }}>
-          <div style={{ display: 'block' }}>
-            <h2>
-              {printingReport === 'stock' && t('stockReport')}
-              {printingReport === 'payroll' && t('payrollReport')}
-              {printingReport === 'employee' && t('employeeReport')}
-              {printingReport === 'production' && t('prodSummaryReport')}
-            </h2>
-            <p style={{ color: '#666', fontSize: '13px' }}>Generated: {new Date().toLocaleString()}</p>
-            <hr />
-
-            {printingReport === 'stock' && (
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '16px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
-                    <th style={{ padding: '6px' }}>Stock Name</th>
-                    <th style={{ padding: '6px' }}>Color</th>
-                    <th style={{ padding: '6px' }}>Bags</th>
-                    <th style={{ padding: '6px' }}>KG</th>
-                    <th style={{ padding: '6px' }}>Lot No.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {db.stock.map(s => (
-                    <tr key={s.id} style={{ borderBottom: '1px solid #ddd' }}>
-                      <td style={{ padding: '6px' }}>{s.stockName}</td>
-                      <td style={{ padding: '6px' }}>{s.color}</td>
-                      <td style={{ padding: '6px' }}>{s.bags}</td>
-                      <td style={{ padding: '6px' }}>{s.kg}</td>
-                      <td style={{ padding: '6px' }}>{s.lotNumber}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
-                    <td style={{ padding: '6px' }} colSpan="2">Total</td>
-                    <td style={{ padding: '6px' }}>{totalStockBags}</td>
-                    <td style={{ padding: '6px' }}>{totalStockKg.toFixed(1)} KG</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            )}
-
-            {printingReport === 'payroll' && (
-              db.payrollRuns.length > 0 ? (
-                <div>
-                  <p><strong>Week {db.payrollRuns[0].week} — {db.payrollRuns[0].month}</strong></p>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '12px' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
-                        <th style={{ padding: '6px' }}>Employee</th>
-                        <th style={{ padding: '6px' }}>Pay Type</th>
-                        <th style={{ padding: '6px' }}>Rate</th>
-                        <th style={{ padding: '6px' }}>Units</th>
-                        <th style={{ padding: '6px' }}>Gross Pay</th>
-                        <th style={{ padding: '6px' }}>Advance</th>
-                        <th style={{ padding: '6px' }}>Net Pay</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {db.payrollRuns[0].details.map((d, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
-                          <td style={{ padding: '6px' }}>{d.employeeName}</td>
-                          <td style={{ padding: '6px' }}>{d.payType}</td>
-                          <td style={{ padding: '6px' }}>₹{d.rate}</td>
-                          <td style={{ padding: '6px' }}>{d.units}</td>
-                          <td style={{ padding: '6px' }}>₹{d.grossPay}</td>
-                          <td style={{ padding: '6px' }}>₹{d.advanceDeduction}</td>
-                          <td style={{ padding: '6px' }}>₹{d.netPay}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ fontWeight: 'bold', borderTop: '2px solid #333' }}>
-                        <td colSpan="6" style={{ padding: '6px' }}>Total Payable</td>
-                        <td style={{ padding: '6px' }}>₹{db.payrollRuns[0].totalPayable}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              ) : (
-                <p>No payroll has been run yet. Go to Payroll → Start Weekly Payroll to generate one.</p>
-              )
-            )}
-
-            {printingReport === 'employee' && (
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '16px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
-                    <th style={{ padding: '6px' }}>Employee</th>
-                    <th style={{ padding: '6px' }}>ID</th>
-                    <th style={{ padding: '6px' }}>Shift</th>
-                    <th style={{ padding: '6px' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {db.employees.map(emp => (
-                    <tr key={emp.id} style={{ borderBottom: '1px solid #ddd' }}>
-                      <td style={{ padding: '6px' }}>{emp.name}</td>
-                      <td style={{ padding: '6px' }}>{emp.id}</td>
-                      <td style={{ padding: '6px' }}>{emp.shift}</td>
-                      <td style={{ padding: '6px' }}>{emp.status}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {printingReport === 'production' && (
-              <div>
-                <p><strong>Today's Production: {productionTodayKg} KG</strong></p>
-                <h4 style={{ marginTop: '16px' }}>Inward</h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
-                      <th style={{ padding: '6px' }}>Date</th>
-                      <th style={{ padding: '6px' }}>Supplier</th>
-                      <th style={{ padding: '6px' }}>Bags</th>
-                      <th style={{ padding: '6px' }}>KG</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {db.inward.map((inw, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td style={{ padding: '6px' }}>{inw.date}</td>
-                        <td style={{ padding: '6px' }}>{inw.supplier}</td>
-                        <td style={{ padding: '6px' }}>{inw.bags}</td>
-                        <td style={{ padding: '6px' }}>{inw.totalKg}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
 
 // ==========================================
 // COMPONENT: SETTINGS DASHBOARD SUBPAGE
@@ -5234,5 +5065,3 @@ function SettingsPage({ db, setDb, t, lang, setLang, exportAllData, showToast, n
     </div>
   );
 }
-
-
