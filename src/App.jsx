@@ -954,6 +954,7 @@ export default function App() {
         };
         setDb(mergedDb);
         setCloudStatus('synced');
+        setIsInitialLoadComplete(true);
         // If the user completed onboarding before → home; else → onboarding
         if (data.settings?.onboardingComplete) {
           navigateTo('home');
@@ -988,6 +989,7 @@ export default function App() {
           payrollRuns: []
         };
         setDb(freshDb);
+        setIsInitialLoadComplete(true);
         navigateTo('onboarding');
         setOnboardingStep(1);
       }
