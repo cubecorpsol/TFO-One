@@ -6,8 +6,39 @@ import {
   signInUser,
   signUpUser,
   signOutUser,
-  fetchFactoryData,
-  upsertFactoryData
+  signInWithGoogle,
+  signInWithGoogleNative,
+  loadAllUserData,
+  getFactorySettings,
+  upsertFactorySettings,
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
+  createYarnType,
+  updateYarnType,
+  deleteYarnType,
+  createStock,
+  updateStock,
+  deleteStock,
+  createSupplier,
+  updateSupplier,
+  deleteSupplier,
+  createParty,
+  updateParty,
+  deleteParty,
+  createInwardTransaction,
+  updateInwardTransaction,
+  deleteInwardTransaction,
+  createOutwardTransaction,
+  updateOutwardTransaction,
+  deleteOutwardTransaction,
+  createAttendance,
+  updateAttendance,
+  deleteAttendance,
+  createPayrollRun,
+  deletePayrollRun,
+  createActivityLog,
+  updateProfile
 } from './supabase';
 import { saveToDB, loadFromDB } from './indexedDB.js';
 import { PushNotifications } from '@capacitor/push-notifications';
@@ -819,21 +850,12 @@ export default function App() {
     }
 
     // --- Local / Demo mode (no Supabase) ---
-    // Try IndexedDB first
+    // Try IndexedDB only
     loadFromDB().then(data => {
       if (data?.settings?.onboardingComplete) {
         setDb(data);
       }
     }).catch(() => {});
-
-    // Fallback to localStorage
-    const local = localStorage.getItem('tfo_db');
-    if (local) {
-      try {
-        const parsed = JSON.parse(local);
-        if (parsed?.settings?.onboardingComplete) return parsed;
-      } catch (e) { /* ignore */ }
-    }
 
     // Demo defaults
     return {
@@ -934,70 +956,55 @@ export default function App() {
     setCloudStatus('syncing');
     
     try {
-      const data = await fetchFactoryData(userId);
+      const data = await loadAllUserData(userId);
       console.log('Cloud data received:', data);
-      if (data) {
-        // Merge cloud data with state
-        const mergedDb = {
-          settings: {
-            ...(data.settings || DEFAULT_FACTORY_SETTINGS),
-            email: userEmail || data.email || data.settings?.email || ''
-          },
-          employees: data.employees || [],
-          stock: data.stock || [],
-          yarn: data.yarn || [],
-          inward: data.inward || [],
-          outward: data.outward || [],
-          activity: data.activity || [],
-          attendance: data.attendance || {},
-          payrollRuns: data.payroll_runs || []
-        };
-        setDb(mergedDb);
-        setCloudStatus('synced');
-        setIsInitialLoadComplete(true);
-        // If the user completed onboarding before → home; else → onboarding
-        if (data.settings?.onboardingComplete) {
-          navigateTo('home');
-        } else {
-          console.log('Cloud user has not completed onboarding, going to onboarding');
-          navigateTo('onboarding');
-          setOnboardingStep(1);
-        }
+      
+      // Transform data to match existing db structure
+      const mergedDb = {
+        settings: data.factorySettings ? {
+          ownerName: data.factorySettings.owner_name || '',
+          factoryName: data.factorySettings.factory_name || '',
+          phone: data.factorySettings.phone || '',
+          whatsapp: data.factorySettings.whatsapp || '',
+          address: data.factorySettings.address || '',
+          pincode: data.factorySettings.pincode || '',
+          logo: data.factorySettings.logo || '',
+          email: userEmail || data.profile?.email || '',
+          onboardingComplete: data.profile?.onboarding_complete || false
+        } : {
+          ownerName: '',
+          factoryName: '',
+          phone: '',
+          whatsapp: '',
+          address: '',
+          logo: '',
+          email: userEmail || '',
+          onboardingComplete: false
+        },
+        employees: data.employees || [],
+        stock: data.stock || [],
+        yarn: data.yarnTypes || [],
+        inward: data.inward || [],
+        outward: data.outward || [],
+        activity: data.activity || [],
+        attendance: {},
+        payrollRuns: data.payrollRuns || []
+      };
+      
+      setDb(mergedDb);
+      setCloudStatus('synced');
+      setIsInitialLoadComplete(true);
+      
+      // If the user completed onboarding before → home; else → onboarding
+      if (mergedDb.settings.onboardingComplete) {
+        navigateTo('home');
       } else {
-        // No cloud record at all — this is a brand-new user
-        setCloudStatus('synced');
-        // Brand-new user — start completely fresh
-        console.log('New user — going to onboarding');
-        const freshDb = {
-          settings: {
-            ownerName: '',
-            factoryName: '',
-            phone: '',
-            whatsapp: '',
-            address: '',
-            logo: '',
-            email: userEmail || '',
-            onboardingComplete: false
-          },
-          employees: [],
-          stock: [],
-          yarn: [],
-          inward: [],
-          outward: [],
-          activity: [],
-          attendance: {},
-          payrollRuns: []
-        };
-        setDb(freshDb);
-        setIsInitialLoadComplete(true);
+        console.log('Cloud user has not completed onboarding, going to onboarding');
         navigateTo('onboarding');
         setOnboardingStep(1);
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
-      // Do NOT reset db and do NOT mark load complete — either would risk
-      // the auto-sync effect pushing wrong/empty data to this user's cloud
-      // row. Show a retry screen and let the user explicitly retry.
       setCloudStatus('offline');
       setDbError('fetch_failed');
       showToast('Could not reach cloud. Please check your connection.', 'error');
@@ -1024,37 +1031,20 @@ export default function App() {
     }
   };
 
-  // Local state persistence + Automatic Cloud Sync (Debounced)
-  useEffect(() => {if (!isInitialLoadComplete) {
-        console.log("Waiting for cloud data...");
-        return;
+  // Local state persistence (IndexedDB only - no localStorage)
+  useEffect(() => {
+    if (!isInitialLoadComplete) {
+      console.log("Waiting for cloud data...");
+      return;
     }
-    console.log('useEffect triggered - saving to IndexedDB');
+    
+    console.log('Saving to IndexedDB');
     saveToDB(db).then(() => {
       console.log('IndexedDB saved successfully');
     }).catch(err => {
       console.error('IndexedDB save error:', err);
     });
-
-    if (!isSupabaseConfigured() || !session) {
-      if (!isSupabaseConfigured() && session) {
-        console.warn("Supabase not configured - data only saved locally");
-      }
-      return;
-    }
-
-    setCloudStatus('syncing');
-    console.log('Syncing data to cloud for user:', session.user.id);
-    upsertFactoryData(session.user.id, db, session.user.email)
-      .then(() => {
-        setCloudStatus('synced');
-        console.log("Data synced to cloud");
-      })
-      .catch((err) => {
-        console.error("Sync error:", err);
-        setCloudStatus('offline');
-      });
-  }, [db, session, isInitialLoadComplete]);
+  }, [db, isInitialLoadComplete]);
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
@@ -1092,7 +1082,6 @@ export default function App() {
     if (!isSupabaseConfigured()) {
       // Mock sign-in (Local Mode)
       if (!db.settings.onboardingComplete) {
-        // Fresh slate for new local users
         setDb({
           settings: { ownerName: '', factoryName: '', phone: '', whatsapp: '', address: '', logo: '', onboardingComplete: false },
           employees: [], stock: [], yarn: [], inward: [], outward: [], activity: [], attendance: {}, payrollRuns: []
@@ -1107,18 +1096,7 @@ export default function App() {
     }
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: "https://tfoone.cubecorpsol.com",
-          queryParams: {
-            prompt: 'select_account', // Force account selection on mobile
-            access_type: 'offline' // Get refresh token for better persistence
-          },
-          skipBrowserRedirect: false // Ensure proper redirect handling
-        }
-      });
-      if (error) throw error;
+      await signInWithGoogle();
     } catch (err) {
       console.error(err);
       showToast(err.message, "error");
@@ -1127,17 +1105,6 @@ export default function App() {
 
   const handleLogout = async () => {
     if (isSupabaseConfigured() && session) {
-      // Flush any pending (debounced) unsynced changes BEFORE signing out,
-      // otherwise edits made in the last 2 seconds are lost forever.
-      try {
-        setCloudStatus('syncing');
-        await upsertFactoryData(session.user.id, db, session.user.email);
-        console.log('Final sync before logout complete');
-      } catch (err) {
-        console.error('Final sync before logout failed:', err);
-        showToast('Warning: last changes may not have synced', 'error');
-      }
-
       try {
         await signOutUser();
         showToast('Logged out from cloud');
@@ -1146,8 +1113,6 @@ export default function App() {
       }
     }
     setSession(null);
-    localStorage.removeItem('tfo_db');
-    sessionStorage.removeItem('tfo_db');
     setDb({
       settings: DEFAULT_FACTORY_SETTINGS,
       employees: DEFAULT_EMPLOYEES,
@@ -1283,7 +1248,7 @@ export default function App() {
   };
 
   // Onboarding next page transitions (4 steps: owner name, TFO name, mobile, location)
-  const handleOnboardingNext = () => {
+  const handleOnboardingNext = async () => {
     if (onboardingStep === 1 && !obName.trim()) { showToast('Please fill all required fields', 'error'); return; }
     if (onboardingStep === 2 && !obFactory.trim()) { showToast('Please fill all required fields', 'error'); return; }
     if (onboardingStep === 3 && !obMobile.trim()) { showToast('Please fill all required fields', 'error'); return; }
@@ -1309,15 +1274,25 @@ export default function App() {
 
       setDb(updatedDb);
 
-      // Force instant sync if logged in, instead of debouncing
+      // Save to new database structure
       if (isSupabaseConfigured() && session) {
         setCloudStatus('syncing');
-        upsertFactoryData(session.user.id, updatedDb, session.user.email)
-          .then(() => setCloudStatus('synced'))
-          .catch((e) => {
-            console.error("Initial onboarding sync error:", e);
-            setCloudStatus('offline');
+        try {
+          await upsertFactorySettings(session.user.id, {
+            owner_name: obName,
+            factory_name: obFactory,
+            phone: obMobile,
+            whatsapp: obMobile,
+            address: obAddress,
+            pincode: obPincode,
+            logo: ''
           });
+          await updateProfile(session.user.id, { onboarding_complete: true });
+          setCloudStatus('synced');
+        } catch (e) {
+          console.error("Onboarding sync error:", e);
+          setCloudStatus('offline');
+        }
       }
 
       navigateTo('home');
