@@ -247,7 +247,7 @@ CREATE TRIGGER handle_updated_at_stock
 
 CREATE TRIGGER handle_updated_at_suppliers
   BEFORE UPDATE ON public.suppliers
-  FOR EACH ROW EXECUTE FUNCTION.public.handle_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TRIGGER handle_updated_at_parties
   BEFORE UPDATE ON public.parties
