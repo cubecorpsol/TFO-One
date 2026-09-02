@@ -3,11 +3,11 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/TFO-One/',
   plugins: [react()],
   server: {
     port: 3000,
-    strictPort: true,
-    base: '/TFO_One/'
+    strictPort: true
   },
   build: {
     chunkSizeWarningLimit: 1000,
