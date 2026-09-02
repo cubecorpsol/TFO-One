@@ -785,6 +785,11 @@ button, select, input {
   color: var(--red);
 }
 
+.history-badge.availability {
+  background-color: rgba(27, 43, 107, 0.1);
+  color: var(--accent-terracotta);
+}
+
 .history-details {
   display: flex;
   justify-content: space-between;

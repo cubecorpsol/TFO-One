@@ -71,16 +71,86 @@ export const signOutUser = async () => {
 };
 
 // ============================================
+// LEGACY SINGLE TABLE HELPERS (for factory_data table)
+// ============================================
+export const fetchFactoryData = async (userId) => {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  console.log('fetchFactoryData: Fetching data for user:', userId);
+  const { data, error } = await supabase
+    .from('factory_data')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  console.log('fetchFactoryData: Response data:', data);
+  console.log('fetchFactoryData: Response error:', error);
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+    throw error;
+  }
+  return data;
+};
+
+export const upsertFactoryData = async (userId, payload, email) => {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  
+  console.log('upsertFactoryData: Preparing to save data for user:', userId);
+  console.log('upsertFactoryData: Payload employees count:', payload.employees?.length);
+  console.log('upsertFactoryData: Payload stock count:', payload.stock?.length);
+  console.log('upsertFactoryData: Payload inward count:', payload.inward?.length);
+  console.log('upsertFactoryData: Payload outward count:', payload.outward?.length);
+  
+  const record = {
+    id: userId,
+    settings: payload.settings,
+    employees: payload.employees || [],
+    stock: payload.stock || [],
+    yarn: payload.yarn || [],
+    inward: payload.inward || [],
+    outward: payload.outward || [],
+    activity: payload.activity || [],
+    attendance: payload.attendance || {},
+    payroll_runs: payload.payrollRuns || [],
+    updated_at: new Date().toISOString()
+  };
+
+  // Add email if provided or present in settings
+  const userEmail = email || payload.settings?.email;
+  if (userEmail) {
+    record.email = userEmail;
+  }
+
+  console.log('upsertFactoryData: Record to save:', record);
+  
+  const { error, data } = await supabase
+    .from('factory_data')
+    .upsert(record);
+
+  console.log('upsertFactoryData: Response data:', data);
+  console.log('upsertFactoryData: Response error:', error);
+
+  if (error) {
+    console.error('upsertFactoryData: Error saving data:', error);
+    throw error;
+  }
+  
+  console.log('upsertFactoryData: Data saved successfully');
+};
+
+// ============================================
 // PROFILE HELPERS
 // ============================================
 export const getProfile = async (userId) => {
   if (!supabase) throw new Error("Supabase is not configured.");
+
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
+
   if (error) throw error;
+
   return data;
 };
 
@@ -91,7 +161,7 @@ export const updateProfile = async (userId, updates) => {
     .update(updates)
     .eq('id', userId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -105,7 +175,7 @@ export const getFactorySettings = async (userId) => {
     .from('factory_settings')
     .select('*')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
   if (error && error.code !== 'PGRST116') throw error;
   return data;
 };
@@ -116,7 +186,7 @@ export const upsertFactorySettings = async (userId, settings) => {
     .from('factory_settings')
     .upsert({ user_id: userId, ...settings })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -141,7 +211,7 @@ export const createEmployee = async (userId, employee) => {
     .from('employees')
     .insert({ user_id: userId, ...employee })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -153,7 +223,7 @@ export const updateEmployee = async (employeeId, updates) => {
     .update(updates)
     .eq('id', employeeId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -187,7 +257,7 @@ export const createYarnType = async (userId, yarn) => {
     .from('yarn_types')
     .insert({ user_id: userId, ...yarn })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -199,7 +269,7 @@ export const updateYarnType = async (yarnId, updates) => {
     .update(updates)
     .eq('id', yarnId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -233,7 +303,7 @@ export const createStock = async (userId, stockItem) => {
     .from('stock')
     .insert({ user_id: userId, ...stockItem })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -245,7 +315,7 @@ export const updateStock = async (stockId, updates) => {
     .update(updates)
     .eq('id', stockId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -279,7 +349,7 @@ export const createSupplier = async (userId, supplier) => {
     .from('suppliers')
     .insert({ user_id: userId, ...supplier })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -291,7 +361,7 @@ export const updateSupplier = async (supplierId, updates) => {
     .update(updates)
     .eq('id', supplierId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -325,7 +395,7 @@ export const createParty = async (userId, party) => {
     .from('parties')
     .insert({ user_id: userId, ...party })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -337,7 +407,7 @@ export const updateParty = async (partyId, updates) => {
     .update(updates)
     .eq('id', partyId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -371,7 +441,7 @@ export const createInwardTransaction = async (userId, transaction) => {
     .from('inward_transactions')
     .insert({ user_id: userId, ...transaction })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -383,7 +453,7 @@ export const updateInwardTransaction = async (transactionId, updates) => {
     .update(updates)
     .eq('id', transactionId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -417,7 +487,7 @@ export const createOutwardTransaction = async (userId, transaction) => {
     .from('outward_transactions')
     .insert({ user_id: userId, ...transaction })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -429,7 +499,7 @@ export const updateOutwardTransaction = async (transactionId, updates) => {
     .update(updates)
     .eq('id', transactionId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -476,7 +546,7 @@ export const createAttendance = async (userId, attendance) => {
     .from('attendance')
     .insert({ user_id: userId, ...attendance })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -488,7 +558,7 @@ export const updateAttendance = async (attendanceId, updates) => {
     .update(updates)
     .eq('id', attendanceId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -522,7 +592,7 @@ export const createPayrollRun = async (userId, payroll) => {
     .from('payroll_runs')
     .insert({ user_id: userId, ...payroll })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -557,7 +627,7 @@ export const createActivityLog = async (userId, activity) => {
     .from('activity_log')
     .insert({ user_id: userId, ...activity })
     .select()
-    .single();
+    .maybeSingle();
   if (error) throw error;
   return data;
 };

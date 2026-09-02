@@ -6,42 +6,14 @@ import {
   signInUser,
   signUpUser,
   signOutUser,
+  fetchFactoryData,
+  upsertFactoryData,
   signInWithGoogle,
-  signInWithGoogleNative,
-  loadAllUserData,
-  getFactorySettings,
-  upsertFactorySettings,
-  createEmployee,
-  updateEmployee,
-  deleteEmployee,
-  createYarnType,
-  updateYarnType,
-  deleteYarnType,
-  createStock,
-  updateStock,
-  deleteStock,
-  createSupplier,
-  updateSupplier,
-  deleteSupplier,
-  createParty,
-  updateParty,
-  deleteParty,
-  createInwardTransaction,
-  updateInwardTransaction,
-  deleteInwardTransaction,
-  createOutwardTransaction,
-  updateOutwardTransaction,
-  deleteOutwardTransaction,
-  createAttendance,
-  updateAttendance,
-  deleteAttendance,
-  createPayrollRun,
-  deletePayrollRun,
-  createActivityLog,
-  updateProfile
+  signInWithGoogleNative
 } from './supabase';
 import { saveToDB, loadFromDB } from './indexedDB.js';
 import { PushNotifications } from '@capacitor/push-notifications';
+import html2pdf from 'html2pdf.js';
 
 // ==========================================
 // TRANSLATION DICTIONARY (EN & TA)
@@ -186,11 +158,12 @@ const translations = {
     supplierName: "Supplier Name",
     purchaseDate: "Purchase Date",
     stockNotes: "Notes",
-    saveStock: "Stock",
+    saveStock: "Save Stock",
     deleteStock: "Delete",
     confirmDeleteStock: "Are you sure you want to delete this stock?",
     viewDetails: "View Details",
     employeesTab: "Employees",
+    availabilityTab: "Availability",
     employeeName: "Employee Name",
     employeeId: "Employee ID",
     designation: "Designation",
@@ -311,6 +284,11 @@ const translations = {
     stockAdded: "Stock added",
     stockUpdated: "Stock updated",
     stockDeleted: "Stock deleted",
+    availableStock: "Available Stock",
+    currentStock: "Current Stock",
+    stockOnHand: "Stock On Hand",
+    availableBags: "Available Bags",
+    availableKg: "Available KG",
     employeeAdded: "Employee added",
     employeeUpdated: "Employee updated",
     employeeDeleted: "Employee deleted",
@@ -469,11 +447,12 @@ const translations = {
     supplierName: "விநியோகஸ்தர் பெயர்",
     purchaseDate: "கொள்முதல் தேதி",
     stockNotes: "குறிப்புகள்",
-    saveStock: "இருப்பை சேமி",
+    saveStock: "ஸ்டாக்கை சேமி",
     deleteStock: "இருப்பை நீக்கு",
     confirmDeleteStock: "இந்த இருப்பை நீக்க வேண்டுமா?",
     viewDetails: "விவரங்களைக் காட்டு",
     employeesTab: "பணியாளர்கள்",
+    availabilityTab: "கிடைக்கக்கூடிய",
     employeeName: "பணியாளர் பெயர்",
     employeeId: "பணியாளர் ஐடி",
     designation: "பதவி",
@@ -594,6 +573,11 @@ const translations = {
     stockAdded: "ஸ்டாக் சேர்க்கப்பட்டது",
     stockUpdated: "ஸ்டாக் புதுப்பிக்கப்பட்டது",
     stockDeleted: "ஸ்டாக் நீக்கப்பட்டது",
+    availableStock: "கிடைக்கக்கூடிய ஸ்டாக்",
+    currentStock: "தற்போதைய ஸ்டாக்",
+    stockOnHand: "கையில் உள்ள ஸ்டாக்",
+    availableBags: "கிடைக்கக்கூடிய மூட்டைகள்",
+    availableKg: "கிடைக்கக்கூடிய கிலோ",
     employeeAdded: "ஊழியர் சேர்க்கப்பட்டார்",
     employeeUpdated: "ஊழியர் புதுப்பிக்கப்பட்டார்",
     employeeDeleted: "ஊழியர் நீக்கப்பட்டார்",
@@ -821,7 +805,7 @@ const DEFAULT_ACTIVITY = [
 export default function App() {
   // State Initialization
   const [lang, setLang] = useState('en');
-  const [screen, setScreen] = useState(isSupabaseConfigured() ? 'loading' : 'auth'); // loading, auth, onboarding, home, stock, staff, payroll, reports, settings, employee_profile
+  const [screen, setScreen] = useState(isSupabaseConfigured() ? 'loading' : 'auth'); // loading, auth, onboarding, home, stock, staff, payroll, reports, settings, employee_profile, history
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
@@ -874,6 +858,7 @@ export default function App() {
   // Navigation history tracker
   const [prevScreen, setPrevScreen] = useState('auth');
   const [activeEmployeeId, setActiveEmployeeId] = useState(null);
+  const [navigationData, setNavigationData] = useState(null);
 
   // Onboarding variables
   const [obName, setObName] = useState('');
@@ -882,12 +867,14 @@ export default function App() {
   const [obWhatsapp, setObWhatsapp] = useState('');
   const [obEmpCount, setObEmpCount] = useState('');
   const [obAddress, setObAddress] = useState('');
+  const [obPincode, setObPincode] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
 
   // Form Bottom Sheet details
   const [bottomSheet, setBottomSheet] = useState(null); // inward, outward, attendance, add_employee, edit_stock, edit_payroll_item
   const [selectedStockColor, setSelectedStockColor] = useState(null);
   const [selectedPayrollEmpId, setSelectedPayrollEmpId] = useState(null);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
   // Dialog / Toast alerts
   const [toast, setToast] = useState({ message: '', type: 'success', visible: false });
@@ -907,16 +894,8 @@ export default function App() {
       return;
     }
 
-    // Timeout fallback: if auth check takes > 6s, fall back to auth screen
-    const authTimeout = setTimeout(() => {
-      console.warn('Auth check timed out, showing auth screen');
-      setScreen('auth');
-      setCloudStatus('offline');
-    }, 6000);
-
-    // Get initial session
+    // Get initial session - Supabase persists session in localStorage automatically
     supabase.auth.getSession().then(({ data: { session } }) => {
-      clearTimeout(authTimeout);
       setSession(session);
       if (session) {
         setCloudStatus('syncing');
@@ -925,8 +904,8 @@ export default function App() {
         setCloudStatus('offline');
         setScreen('auth');
       }
-    }).catch(() => {
-      clearTimeout(authTimeout);
+    }).catch((err) => {
+      console.error('Auth session error:', err);
       setCloudStatus('offline');
       setScreen('auth');
     });
@@ -946,7 +925,6 @@ export default function App() {
 
     return () => {
       subscription.unsubscribe();
-      clearTimeout(authTimeout);
     };
   }, []);
 
@@ -956,52 +934,84 @@ export default function App() {
     setCloudStatus('syncing');
     
     try {
-      const data = await loadAllUserData(userId);
+      const data = await fetchFactoryData(userId);
       console.log('Cloud data received:', data);
-      
-      // Transform data to match existing db structure
-      const mergedDb = {
-        settings: data.factorySettings ? {
-          ownerName: data.factorySettings.owner_name || '',
-          factoryName: data.factorySettings.factory_name || '',
-          phone: data.factorySettings.phone || '',
-          whatsapp: data.factorySettings.whatsapp || '',
-          address: data.factorySettings.address || '',
-          pincode: data.factorySettings.pincode || '',
-          logo: data.factorySettings.logo || '',
-          email: userEmail || data.profile?.email || '',
-          onboardingComplete: data.profile?.onboarding_complete || false
-        } : {
-          ownerName: '',
-          factoryName: '',
-          phone: '',
-          whatsapp: '',
-          address: '',
-          logo: '',
-          email: userEmail || '',
-          onboardingComplete: false
-        },
-        employees: data.employees || [],
-        stock: data.stock || [],
-        yarn: data.yarnTypes || [],
-        inward: data.inward || [],
-        outward: data.outward || [],
-        activity: data.activity || [],
-        attendance: {},
-        payrollRuns: data.payrollRuns || []
-      };
-      
-      setDb(mergedDb);
-      setCloudStatus('synced');
-      setIsInitialLoadComplete(true);
-      
-      // If the user completed onboarding before → home; else → onboarding
-      if (mergedDb.settings.onboardingComplete) {
-        navigateTo('home');
+      if (data) {
+        // Merge cloud data with state
+        const mergedDb = {
+          settings: {
+            ...(data.settings || DEFAULT_FACTORY_SETTINGS),
+            email: userEmail || data.email || data.settings?.email || ''
+          },
+          employees: data.employees || [],
+          stock: data.stock || [],
+          yarn: data.yarn || [],
+          inward: data.inward || [],
+          outward: data.outward || [],
+          activity: data.activity || [],
+          attendance: data.attendance || {},
+          payrollRuns: data.payroll_runs || []
+        };
+        setDb(mergedDb);
+        setCloudStatus('synced');
+        setIsInitialLoadComplete(true);
+        // If the user completed onboarding before → home; else → onboarding
+        if (data.settings?.onboardingComplete) {
+          navigateTo('home');
+        } else {
+          console.log('Cloud user has not completed onboarding, going to onboarding');
+          navigateTo('onboarding');
+          setOnboardingStep(1);
+        }
       } else {
-        console.log('Cloud user has not completed onboarding, going to onboarding');
-        navigateTo('onboarding');
-        setOnboardingStep(1);
+        // No cloud record at all — this is a brand-new user.
+        // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
+        let completedLocally = false;
+        try {
+          const localData = localStorage.getItem('tfo_db');
+          if (localData) {
+            const parsed = JSON.parse(localData);
+            completedLocally = !!parsed?.settings?.onboardingComplete;
+          }
+        } catch (e) {
+          console.error('Error parsing localStorage:', e);
+        }
+
+        setCloudStatus('synced');
+        setIsInitialLoadComplete(true);
+        if (completedLocally) {
+          console.log('Onboarding completed locally, going to home');
+          navigateTo('home');
+        } else {
+          // Brand-new user — wipe default mock data and start completely fresh
+          console.log('New user — clearing mock data and going to onboarding');
+          const freshDb = {
+            settings: {
+              ownerName: '',
+              factoryName: '',
+              phone: '',
+              whatsapp: '',
+              address: '',
+              logo: '',
+              email: userEmail || '',
+              onboardingComplete: false
+            },
+            employees: [],
+            stock: [],
+            yarn: [],
+            inward: [],
+            outward: [],
+            activity: [],
+            attendance: {},
+            payrollRuns: []
+          };
+          setDb(freshDb);
+          // Clear localStorage so stale default data doesn't survive a page refresh
+          localStorage.removeItem('tfo_db');
+          sessionStorage.removeItem('tfo_db');
+          navigateTo('onboarding');
+          setOnboardingStep(1);
+        }
       }
     } catch (err) {
       console.error("Cloud fetch error:", err);
@@ -1031,20 +1041,51 @@ export default function App() {
     }
   };
 
-  // Local state persistence (IndexedDB only - no localStorage)
+  // Local state persistence (IndexedDB + localStorage + sessionStorage) + Automatic Cloud Sync
   useEffect(() => {
     if (!isInitialLoadComplete) {
       console.log("Waiting for cloud data...");
       return;
     }
     
-    console.log('Saving to IndexedDB');
+    console.log('Saving to IndexedDB and localStorage');
+    const dbString = JSON.stringify(db);
+    
+    // Save to IndexedDB (primary storage)
     saveToDB(db).then(() => {
       console.log('IndexedDB saved successfully');
     }).catch(err => {
       console.error('IndexedDB save error:', err);
     });
+    
+    // Save to localStorage (backup for quick restore)
+    localStorage.setItem('tfo_db', dbString);
+    
+    // Save to sessionStorage (current session backup)
+    sessionStorage.setItem('tfo_db', dbString);
   }, [db, isInitialLoadComplete]);
+
+  // Automatic Cloud Sync (Debounced)
+  useEffect(() => {
+    if (!isInitialLoadComplete || !session || !isSupabaseConfigured()) {
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setCloudStatus('syncing');
+      console.log('Attempting to sync data to cloud for user:', session.user.id);
+      try {
+        await upsertFactoryData(session.user.id, db, session.user.email);
+        setCloudStatus('synced');
+        console.log("Data synced to cloud successfully");
+      } catch (err) {
+        console.error("Auto sync error:", err);
+        setCloudStatus('offline');
+      }
+    }, 1000); // Debounce sync by 1 second
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [db, session, isInitialLoadComplete]);
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
@@ -1242,9 +1283,12 @@ export default function App() {
   };
 
   // Switch Screen Helper
-  const navigateTo = (target) => {
+  const navigateTo = (target, data = null) => {
     setPrevScreen(screen);
     setScreen(target);
+    if (data) {
+      setNavigationData(data);
+    }
   };
 
   // Onboarding next page transitions (4 steps: owner name, TFO name, mobile, location)
@@ -1274,20 +1318,11 @@ export default function App() {
 
       setDb(updatedDb);
 
-      // Save to new database structure
+      // Save to Supabase
       if (isSupabaseConfigured() && session) {
         setCloudStatus('syncing');
         try {
-          await upsertFactorySettings(session.user.id, {
-            owner_name: obName,
-            factory_name: obFactory,
-            phone: obMobile,
-            whatsapp: obMobile,
-            address: obAddress,
-            pincode: obPincode,
-            logo: ''
-          });
-          await updateProfile(session.user.id, { onboarding_complete: true });
+          await upsertFactoryData(session.user.id, updatedDb, session.user.email);
           setCloudStatus('synced');
         } catch (e) {
           console.error("Onboarding sync error:", e);
@@ -1468,18 +1503,55 @@ export default function App() {
       return;
     }
 
-    // Verify Stock levels
-    let updatedStock = [...db.stock];
-    const stockIdx = updatedStock.findIndex(item => item.color === outwardColor);
+    // Calculate total KG to be dispatched
     const calculatedTotalKg = bagsCount * weightVal;
 
-    if (stockIdx === -1 || updatedStock[stockIdx].bags < bagsCount) {
-      showToast('Insufficient stock', 'error');
+    // Find all stock items matching the color
+    let updatedStock = [...db.stock];
+    const matchingStockItems = updatedStock.filter(item => item.color === outwardColor);
+    
+    // Calculate total available stock for this color
+    const totalAvailableBags = matchingStockItems.reduce((sum, item) => sum + item.bags, 0);
+    const totalAvailableKg = matchingStockItems.reduce((sum, item) => sum + item.kg, 0);
+
+    if (matchingStockItems.length === 0) {
+      showToast(`No stock found for color: ${outwardColor}`, 'error');
       return;
     }
 
-    updatedStock[stockIdx].kg -= calculatedTotalKg;
-    updatedStock[stockIdx].bags -= bagsCount;
+    if (totalAvailableBags < bagsCount) {
+      showToast(`Insufficient stock. Available: ${totalAvailableBags} bags (${totalAvailableKg.toFixed(2)} KG), Required: ${bagsCount} bags (${calculatedTotalKg.toFixed(2)} KG)`, 'error');
+      return;
+    }
+
+    // Deduct from stock items (FIFO - oldest first)
+    let bagsToDeduct = bagsCount;
+    let kgToDeduct = calculatedTotalKg;
+    
+    // Sort by creation date to use oldest stock first
+    matchingStockItems.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    
+    for (let i = 0; i < matchingStockItems.length && bagsToDeduct > 0; i++) {
+      const stockItem = matchingStockItems[i];
+      const stockIdx = updatedStock.findIndex(item => item.id === stockItem.id);
+      
+      if (stockIdx === -1) continue;
+      
+      const deductBags = Math.min(bagsToDeduct, updatedStock[stockIdx].bags);
+      const deductKg = (deductBags / bagsCount) * kgToDeduct;
+      
+      updatedStock[stockIdx].bags -= deductBags;
+      updatedStock[stockIdx].kg -= deductKg;
+      
+      // Remove stock item if bags become 0
+      if (updatedStock[stockIdx].bags <= 0) {
+        updatedStock[stockIdx].bags = 0;
+        updatedStock[stockIdx].kg = 0;
+      }
+      
+      bagsToDeduct -= deductBags;
+      kgToDeduct -= deductKg;
+    }
 
     const newId = "OUT-" + Math.floor(1000 + Math.random() * 9000);
     const newEntry = {
@@ -1502,7 +1574,7 @@ export default function App() {
     }));
 
     setBottomSheet(null);
-    showToast('Saved successfully');
+    showToast(`Dispatched ${bagsCount} bags (${calculatedTotalKg.toFixed(2)} KG) of ${outwardColor} to ${finalParty}`);
     setOutwardParty('');
     setOutwardNewParty('');
     setOutwardColor('');
@@ -1707,12 +1779,14 @@ export default function App() {
   // Stock Edit bottom sheet handling
   const [stockEditKg, setStockEditKg] = useState('');
   const [stockEditBags, setStockEditBags] = useState('');
+  const [stockEditKgPerBag, setStockEditKgPerBag] = useState('62.250');
   const [stockEditReason, setStockEditReason] = useState('');
 
   const openStockEdit = (colorObj) => {
     setSelectedStockColor(colorObj.color);
     setStockEditKg(colorObj.kg.toString());
     setStockEditBags(colorObj.bags.toString());
+    setStockEditKgPerBag(colorObj.bags > 0 ? (colorObj.kg / colorObj.bags).toFixed(3) : '62.250');
     setStockEditReason('Stock audit');
     setBottomSheet('edit_stock');
   };
@@ -1856,17 +1930,22 @@ export default function App() {
   // Calculate mock or real production data values for 7 days
   const todayDayIndex = (new Date().getDay() + 6) % 7; // Convert Sun=0 to Mon=0, Sun=6
   const getWeeklyProdValues = () => {
-    // Generate values based on inward yarn records
-    const values = [450, 620, 310, 800, 540, 930, 200];
-    // Dynamic replacement of today's inward KG sum
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todayInwardSum = db.inward
-      .filter(item => item.date === todayStr)
-      .reduce((sum, item) => sum + item.totalKg, 0);
-
-    if (todayInwardSum > 0) {
-      values[todayDayIndex] = Math.round(todayInwardSum);
+    // Calculate values based on actual inward yarn records for each day of the week
+    const values = [0, 0, 0, 0, 0, 0, 0];
+    const today = new Date();
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - todayDayIndex + i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const daySum = db.inward
+        .filter(item => item.date === dateStr)
+        .reduce((sum, item) => sum + item.totalKg, 0);
+      
+      values[i] = Math.round(daySum);
     }
+    
     return values;
   };
 
@@ -2113,10 +2192,19 @@ create policy "Users can insert own factory data." on public.factory_data for in
                     value={obAddress}
                     onChange={(e) => setObAddress(e.target.value)}
                     onKeyDown={handleOnboardingKeyDown}
-                    placeholder="e.g. Chennimalai, Tamil Nadu, 638051"
-                    rows="3"
+                    placeholder="e.g. Chennimalai, Tamil Nadu"
+                    rows="2"
                     autoFocus
                   ></textarea>
+                  <input
+                    type="text"
+                    className="large-input mt-8"
+                    style={{ fontSize: '16px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px' }}
+                    value={obPincode}
+                    onChange={(e) => setObPincode(e.target.value)}
+                    onKeyDown={handleOnboardingKeyDown}
+                    placeholder="Pincode (e.g. 638051)"
+                  />
 
                   <div className="card onboarding-summary mt-16">
                     <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>Review your information</h3>
@@ -2124,6 +2212,7 @@ create policy "Users can insert own factory data." on public.factory_data for in
                     <div className="summary-row"><span className="summary-label">Factory Name:</span><span className="summary-value">{obFactory}</span></div>
                     <div className="summary-row"><span className="summary-label">Mobile Number:</span><span className="summary-value">+91 {obMobile}</span></div>
                     <div className="summary-row"><span className="summary-label">Factory Address:</span><span className="summary-value">{obAddress}</span></div>
+                    <div className="summary-row"><span className="summary-label">Pincode:</span><span className="summary-value">{obPincode}</span></div>
                   </div>
                 </>
               )}
@@ -2221,45 +2310,99 @@ create policy "Users can insert own factory data." on public.factory_data for in
             </div>
 
             {/* Recent Activity feed */}
-            <div className="card">
-              <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>Recent Activity</h3>
-              <div className="activity-feed">
-                {db.activity.map((item, idx) => {
-                  let icon = "ti ti-info-circle";
-                  let colorClass = "amber";
-                  if (item.type === 'inward') { icon = "ti ti-arrow-down-left"; colorClass = "green"; }
-                  if (item.type === 'outward') { icon = "ti ti-arrow-up-right"; colorClass = "red"; }
-                  if (item.type === 'attendance') { icon = "ti ti-users"; colorClass = "amber"; }
-
-                  // Dynamically translate activity text
-                  let activityText = item.text;
-                  if (item.data) {
-                    if (item.type === 'inward') {
-                      activityText = `Received ${item.data.bags} bags ${item.data.color} from ${item.data.supplier}`;
-                    } else if (item.type === 'outward') {
-                      activityText = `Dispatched ${item.data.bags} bags ${item.data.color} to ${item.data.party}`;
-                    } else if (item.data.type) {
-                      const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
-                      activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
-                    }
-                  }
-
-                  return (
-                    <div className="activity-item" key={idx}>
-                      <div className="activity-left">
-                        <div className={`activity-icon-round ${colorClass}`}>
-                          <i className={icon}></i>
-                        </div>
-                        <div className="text-left" style={{ maxWidth: '240px' }}>
-                          <p style={{ fontSize: '13px', fontWeight: '700' }}>{activityText}</p>
-                          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.timestamp}</p>
-                        </div>
-                      </div>
-                      <span className={`badge-sync ${colorClass}`} style={{ fontSize: '11px', fontWeight: '800' }}>{item.badge}</span>
-                    </div>
-                  );
-                })}
+            <div className="card" style={{ cursor: 'default' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '15px', textAlign: 'left', margin: 0 }}>History</h3>
+                <button 
+                  onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    cursor: 'pointer', 
+                    padding: '4px',
+                    color: 'var(--text-muted)'
+                  }}
+                >
+                  <i className={`ti ti-chevron-${isHistoryExpanded ? 'up' : 'down'}`}></i>
+                </button>
               </div>
+              {isHistoryExpanded ? (
+                <div className="activity-feed">
+                  {db.activity.map((item, idx) => {
+                    let icon = "ti ti-info-circle";
+                    let colorClass = "amber";
+                    if (item.type === 'inward') { icon = "ti ti-arrow-down-left"; colorClass = "green"; }
+                    if (item.type === 'outward') { icon = "ti ti-arrow-up-right"; colorClass = "red"; }
+                    if (item.type === 'attendance') { icon = "ti ti-users"; colorClass = "amber"; }
+
+                    // Dynamically translate activity text
+                    let activityText = item.text;
+                    if (item.data) {
+                      if (item.type === 'inward') {
+                        activityText = `Received ${item.data.bags} bags ${item.data.color} from ${item.data.supplier}`;
+                      } else if (item.type === 'outward') {
+                        activityText = `Dispatched ${item.data.bags} bags ${item.data.color} to ${item.data.party}`;
+                      } else if (item.data.type) {
+                        const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
+                        activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
+                      }
+                    }
+
+                    return (
+                      <div className="activity-item" key={idx}>
+                        <div className="activity-left">
+                          <div className={`activity-icon-round ${colorClass}`}>
+                            <i className={icon}></i>
+                          </div>
+                          <div className="text-left" style={{ maxWidth: '240px' }}>
+                            <p style={{ fontSize: '13px', fontWeight: '700' }}>{activityText}</p>
+                            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.timestamp}</p>
+                          </div>
+                        </div>
+                        <span className={`badge-sync ${colorClass}`} style={{ fontSize: '11px', fontWeight: '800' }}>{item.badge}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="activity-feed">
+                  {db.activity.slice(0, 3).map((item, idx) => {
+                    let icon = "ti ti-info-circle";
+                    let colorClass = "amber";
+                    if (item.type === 'inward') { icon = "ti ti-arrow-down-left"; colorClass = "green"; }
+                    if (item.type === 'outward') { icon = "ti ti-arrow-up-right"; colorClass = "red"; }
+                    if (item.type === 'attendance') { icon = "ti ti-users"; colorClass = "amber"; }
+
+                    // Dynamically translate activity text
+                    let activityText = item.text;
+                    if (item.data) {
+                      if (item.type === 'inward') {
+                        activityText = `Received ${item.data.bags} bags ${item.data.color} from ${item.data.supplier}`;
+                      } else if (item.type === 'outward') {
+                        activityText = `Dispatched ${item.data.bags} bags ${item.data.color} to ${item.data.party}`;
+                      } else if (item.data.type) {
+                        const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
+                        activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
+                      }
+                    }
+
+                    return (
+                      <div className="activity-item" key={idx}>
+                        <div className="activity-left">
+                          <div className={`activity-icon-round ${colorClass}`}>
+                            <i className={icon}></i>
+                          </div>
+                          <div className="text-left" style={{ maxWidth: '240px' }}>
+                            <p style={{ fontSize: '13px', fontWeight: '700' }}>{activityText}</p>
+                            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.timestamp}</p>
+                          </div>
+                        </div>
+                        <span className={`badge-sync ${colorClass}`} style={{ fontSize: '11px', fontWeight: '800' }}>{item.badge}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -2278,6 +2421,86 @@ create policy "Users can insert own factory data." on public.factory_data for in
             showToast={showToast}
             setConfirmModal={setConfirmModal}
             addActivity={addActivity}
+            navigateTo={navigateTo}
+          />
+        )}
+
+        {/* 4b. STOCK ADD VIEW */}
+        {screen === 'stock_add' && (
+          <StockAddPage
+            db={db}
+            t={t}
+            lang={lang}
+            setDb={setDb}
+            showToast={showToast}
+            navigateTo={navigateTo}
+            addActivity={addActivity}
+          />
+        )}
+
+        {/* 4c. STOCK EDIT VIEW */}
+        {screen === 'stock_edit' && (
+          <StockEditPage
+            db={db}
+            t={t}
+            lang={lang}
+            setDb={setDb}
+            showToast={showToast}
+            navigateTo={navigateTo}
+            addActivity={addActivity}
+            stockData={navigationData}
+          />
+        )}
+
+        {/* 4d. EMPLOYEE DETAILS VIEW */}
+        {screen === 'employee_details' && (
+          <EmployeeDetailsPage
+            db={db}
+            t={t}
+            lang={lang}
+            setDb={setDb}
+            showToast={showToast}
+            navigateTo={navigateTo}
+            addActivity={addActivity}
+            employeeData={navigationData}
+          />
+        )}
+
+        {/* 4e. INWARD EDIT VIEW */}
+        {screen === 'inward_edit' && (
+          <InwardEditPage
+            db={db}
+            t={t}
+            lang={lang}
+            setDb={setDb}
+            showToast={showToast}
+            navigateTo={navigateTo}
+            addActivity={addActivity}
+            inwardData={navigationData}
+          />
+        )}
+
+        {/* 4f. OUTWARD EDIT VIEW */}
+        {screen === 'outward_edit' && (
+          <OutwardEditPage
+            db={db}
+            t={t}
+            lang={lang}
+            setDb={setDb}
+            showToast={showToast}
+            navigateTo={navigateTo}
+            addActivity={addActivity}
+            outwardData={navigationData}
+          />
+        )}
+
+        {/* 4g. HISTORY VIEW */}
+        {screen === 'history' && (
+          <HistoryPage
+            db={db}
+            t={t}
+            lang={lang}
+            navigateTo={navigateTo}
           />
         )}
 
@@ -2372,23 +2595,23 @@ create policy "Users can insert own factory data." on public.factory_data for in
         <nav className="app-bottom-nav">
           <button className={`nav-tab ${screen === 'home' ? 'active' : ''}`} onClick={() => navigateTo('home')}>
             <i className="ti ti-home-2"></i>
-            <span>Home</span>
+            <span>{t('home')}</span>
           </button>
           <button className={`nav-tab ${screen === 'stock' ? 'active' : ''}`} onClick={() => navigateTo('stock')}>
             <i className="ti ti-package"></i>
-            <span>Stock</span>
+            <span>Edits</span>
           </button>
           <button className={`nav-tab ${screen === 'staff' || screen === 'employee_profile' ? 'active' : ''}`} onClick={() => navigateTo('staff')}>
             <i className="ti ti-users"></i>
-            <span>Staff</span>
+            <span>{t('staff')}</span>
           </button>
           <button className={`nav-tab ${screen === 'payroll' ? 'active' : ''}`} onClick={() => navigateTo('payroll')}>
             <i className="ti ti-currency-rupee"></i>
-            <span>Payroll</span>
+            <span>{t('payroll')}</span>
           </button>
           <button className={`nav-tab ${screen === 'reports' ? 'active' : ''}`} onClick={() => navigateTo('reports')}>
             <i className="ti ti-chart-bar"></i>
-            <span>Reports</span>
+            <span>{t('reports')}</span>
           </button>
         </nav>
       )}
@@ -2513,10 +2736,16 @@ create policy "Users can insert own factory data." on public.factory_data for in
 
             <div className="form-group">
               <label>Color</label>
-              <select value={outwardColor} onChange={(e) => setOutwardColor(e.target.value)} required>
+              <select value={outwardColor} onChange={(e) => {
+                setOutwardColor(e.target.value);
+                const selectedStock = db.stock.find(item => item.color === e.target.value);
+                if (selectedStock && selectedStock.bags > 0) {
+                  setOutwardBagWeight((selectedStock.kg / selectedStock.bags).toFixed(3));
+                }
+              }} required>
                 <option value="">Select stock color</option>
                 {db.stock.map(item => (
-                  <option value={item.color} key={item.color}>{item.color} ({item.bags} bags left)</option>
+                  <option value={item.color} key={item.color}>{item.color} - {item.bags} bags, {item.kg.toFixed(1)} KG available</option>
                 ))}
               </select>
             </div>
@@ -2735,13 +2964,30 @@ create policy "Users can insert own factory data." on public.factory_data for in
             <h3 style={{ fontSize: '15px', color: 'var(--accent-terracotta)', marginBottom: '12px' }}>Colour: {selectedStockColor}</h3>
 
             <div className="form-group">
-              <label>KG Quantity</label>
-              <input type="number" step="0.1" value={stockEditKg} onChange={(e) => setStockEditKg(e.target.value)} />
+              <label>Bags Count</label>
+              <input type="number" value={stockEditBags} onChange={(e) => {
+                const bags = e.target.value;
+                const kgPerBag = stockEditKgPerBag;
+                const totalKg = (parseFloat(bags) || 0) * (parseFloat(kgPerBag) || 0);
+                setStockEditBags(bags);
+                setStockEditKg(totalKg.toFixed(3));
+              }} />
             </div>
 
             <div className="form-group">
-              <label>Bags Count</label>
-              <input type="number" value={stockEditBags} onChange={(e) => setStockEditBags(e.target.value)} />
+              <label>KG Per Bag</label>
+              <input type="number" step="0.001" value={stockEditKgPerBag} onChange={(e) => {
+                const kgPerBag = e.target.value;
+                const bags = stockEditBags;
+                const totalKg = (parseFloat(bags) || 0) * (parseFloat(kgPerBag) || 0);
+                setStockEditKgPerBag(kgPerBag);
+                setStockEditKg(totalKg.toFixed(3));
+              }} />
+            </div>
+
+            <div className="form-group">
+              <label>Total KG (Auto-calculated)</label>
+              <input type="number" step="0.001" value={stockEditKg} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
             </div>
 
             <div className="form-group">
@@ -2842,24 +3088,1589 @@ create policy "Users can insert own factory data." on public.factory_data for in
 }
 
 // ==========================================
+// COMPONENT: STOCK ADD PAGE
+// ==========================================
+function StockAddPage({ db, t, lang, setDb, showToast, navigateTo, addActivity }) {
+  const [stockForm, setStockForm] = useState({
+    stockName: '',
+    yarnType: '',
+    color: '',
+    lotNumber: '',
+    numBags: '',
+    weightPerBag: '',
+    totalWeight: '',
+    purchasePrice: '',
+    supplierName: '',
+    purchaseDate: '',
+    notes: ''
+  });
+
+  // Dropdown states
+  const [showDropdown, setShowDropdown] = useState(null);
+  const [dropdownOptions, setDropdownOptions] = useState([]);
+
+  const getUniqueValues = (field, dataArray) => {
+    const values = dataArray.map(item => item[field]).filter(Boolean);
+    return [...new Set(values)];
+  };
+
+  const getStockDropdownOptions = (field) => {
+    if (field === 'yarnType') return getUniqueValues('yarnType', db.stock);
+    if (field === 'color') return getUniqueValues('color', db.stock);
+    if (field === 'supplierName') return getUniqueValues('supplierName', db.stock);
+    return [];
+  };
+
+  const handleDropdownToggle = (field) => {
+    const options = getStockDropdownOptions(field);
+    setDropdownOptions(options);
+    setShowDropdown(showDropdown === field ? null : field);
+  };
+
+  const handleDropdownSelect = (field, value) => {
+    setStockForm(prev => ({ ...prev, [field]: value }));
+    setShowDropdown(null);
+  };
+
+  const saveStock = () => {
+    if (!stockForm.stockName || !stockForm.color || !stockForm.numBags) {
+      showToast('Please fill all required fields', 'error');
+      return;
+    }
+
+    const newStock = {
+      id: `STK-${Date.now()}`,
+      stockName: stockForm.stockName,
+      yarnType: stockForm.yarnType,
+      color: stockForm.color,
+      lotNumber: stockForm.lotNumber,
+      numBags: parseFloat(stockForm.numBags) || 0,
+      weightPerBag: parseFloat(stockForm.weightPerBag) || 0,
+      kg: parseFloat(stockForm.totalWeight) || 0,
+      bags: parseFloat(stockForm.numBags) || 0,
+      purchasePrice: parseFloat(stockForm.purchasePrice) || 0,
+      supplierName: stockForm.supplierName,
+      purchaseDate: stockForm.purchaseDate,
+      notes: stockForm.notes,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedStock = [...db.stock, newStock];
+    setDb(prev => ({ ...prev, stock: updatedStock }));
+    addActivity('stockAdded', { type: 'stock', name: newStock.stockName });
+    showToast('Saved successfully');
+    navigateTo('stock');
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <button className="btn-back" onClick={() => navigateTo('stock')}>
+          <i className="ti ti-arrow-left"></i>
+        </button>
+        <h2 style={{ fontSize: '18px', margin: 0 }}>Add Stock</h2>
+      </div>
+      <div className="page-content">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="form-group">
+            <label>{t('stockName')}</label>
+            <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
+          </div>
+          <div className="form-row">
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label>{t('yarnType')}</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input 
+                  type="text" 
+                  value={stockForm.yarnType} 
+                  onChange={(e) => setStockForm({...stockForm, yarnType: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleDropdownToggle('yarnType')}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+                >
+                  <i className="ti ti-chevron-down"></i>
+                </button>
+              </div>
+              {showDropdown === 'yarnType' && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 100,
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  marginTop: '4px'
+                }}>
+                  {dropdownOptions.map((opt, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleDropdownSelect('yarnType', opt)}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                  {dropdownOptions.length === 0 && (
+                    <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label>{t('color')}</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input 
+                  type="text" 
+                  value={stockForm.color} 
+                  onChange={(e) => setStockForm({...stockForm, color: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleDropdownToggle('color')}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+                >
+                  <i className="ti ti-chevron-down"></i>
+                </button>
+              </div>
+              {showDropdown === 'color' && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 100,
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  marginTop: '4px'
+                }}>
+                  {dropdownOptions.map((opt, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleDropdownSelect('color', opt)}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                  {dropdownOptions.length === 0 && (
+                    <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('lotNumber')}</label>
+              <input type="text" value={stockForm.lotNumber} onChange={(e) => setStockForm({...stockForm, lotNumber: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>{t('numBags')}</label>
+              <input type="number" value={stockForm.numBags} onChange={(e) => setStockForm({...stockForm, numBags: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('weightPerBag')}</label>
+              <input type="number" step="0.001" value={stockForm.weightPerBag} onChange={(e) => setStockForm({...stockForm, weightPerBag: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>{t('totalWeight')}</label>
+              <input type="number" step="0.001" value={stockForm.totalWeight} onChange={(e) => setStockForm({...stockForm, totalWeight: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('purchasePrice')}</label>
+              <input type="number" value={stockForm.purchasePrice} onChange={(e) => setStockForm({...stockForm, purchasePrice: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>{t('purchaseDate')}</label>
+              <input type="date" value={stockForm.purchaseDate} onChange={(e) => setStockForm({...stockForm, purchaseDate: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>{t('supplierName')}</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input 
+                type="text" 
+                value={stockForm.supplierName} 
+                onChange={(e) => setStockForm({...stockForm, supplierName: e.target.value})} 
+                style={{ flex: 1 }}
+              />
+              <button 
+                type="button"
+                onClick={() => handleDropdownToggle('supplierName')}
+                style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+              >
+                <i className="ti ti-chevron-down"></i>
+              </button>
+            </div>
+            {showDropdown === 'supplierName' && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                marginTop: '4px'
+              }}>
+                {dropdownOptions.map((opt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleDropdownSelect('supplierName', opt)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    {opt}
+                  </div>
+                ))}
+                {dropdownOptions.length === 0 && (
+                  <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>{t('stockNotes')}</label>
+            <textarea value={stockForm.notes} onChange={(e) => setStockForm({...stockForm, notes: e.target.value})} rows="3"></textarea>
+          </div>
+          <button type="button" className="btn btn-primary mt-8" style={{ width: '100%' }} onClick={saveStock}>{t('save')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// COMPONENT: STOCK EDIT PAGE
+// ==========================================
+function StockEditPage({ db, t, lang, setDb, showToast, navigateTo, addActivity, stockData }) {
+  const [stockForm, setStockForm] = useState({
+    stockName: '',
+    yarnType: '',
+    color: '',
+    lotNumber: '',
+    numBags: '',
+    weightPerBag: '',
+    totalWeight: '',
+    purchasePrice: '',
+    supplierName: '',
+    purchaseDate: '',
+    notes: ''
+  });
+
+  // Initialize form with stock data when component mounts or stockData changes
+  useEffect(() => {
+    if (stockData) {
+      setStockForm({
+        stockName: stockData.stockName || '',
+        yarnType: stockData.yarnType || '',
+        color: stockData.color || '',
+        lotNumber: stockData.lotNumber || '',
+        numBags: stockData.bags?.toString() || '',
+        weightPerBag: stockData.weightPerBag?.toString() || '',
+        totalWeight: stockData.kg?.toString() || '',
+        purchasePrice: stockData.purchasePrice?.toString() || '',
+        supplierName: stockData.supplierName || '',
+        purchaseDate: stockData.purchaseDate || '',
+        notes: stockData.notes || ''
+      });
+    }
+  }, [stockData]);
+
+  // Dropdown states
+  const [showDropdown, setShowDropdown] = useState(null);
+  const [dropdownOptions, setDropdownOptions] = useState([]);
+
+  const getUniqueValues = (field, dataArray) => {
+    const values = dataArray.map(item => item[field]).filter(Boolean);
+    return [...new Set(values)];
+  };
+
+  const getStockDropdownOptions = (field) => {
+    if (field === 'yarnType') return getUniqueValues('yarnType', db.stock);
+    if (field === 'color') return getUniqueValues('color', db.stock);
+    if (field === 'supplierName') return getUniqueValues('supplierName', db.stock);
+    return [];
+  };
+
+  const handleDropdownToggle = (field) => {
+    const options = getStockDropdownOptions(field);
+    setDropdownOptions(options);
+    setShowDropdown(showDropdown === field ? null : field);
+  };
+
+  const handleDropdownSelect = (field, value) => {
+    setStockForm(prev => ({ ...prev, [field]: value }));
+    setShowDropdown(null);
+  };
+
+  const saveStock = () => {
+    if (!stockForm.stockName || !stockForm.color || !stockForm.numBags) {
+      showToast('Please fill all required fields', 'error');
+      return;
+    }
+
+    const updatedStock = {
+      ...stockData,
+      stockName: stockForm.stockName,
+      yarnType: stockForm.yarnType,
+      color: stockForm.color,
+      lotNumber: stockForm.lotNumber,
+      numBags: parseFloat(stockForm.numBags) || 0,
+      weightPerBag: parseFloat(stockForm.weightPerBag) || 0,
+      kg: parseFloat(stockForm.totalWeight) || 0,
+      bags: parseFloat(stockForm.numBags) || 0,
+      purchasePrice: parseFloat(stockForm.purchasePrice) || 0,
+      supplierName: stockForm.supplierName,
+      purchaseDate: stockForm.purchaseDate,
+      notes: stockForm.notes,
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedStockList = db.stock.map(s => s.id === stockData.id ? updatedStock : s);
+    setDb(prev => ({ ...prev, stock: updatedStockList }));
+    addActivity('stockUpdated', { type: 'stock', name: updatedStock.stockName });
+    showToast('Saved successfully');
+    navigateTo('stock');
+  };
+
+  const deleteStock = () => {
+    const updatedStock = db.stock.filter(s => s.id !== stockData.id);
+    setDb(prev => ({ ...prev, stock: updatedStock }));
+    addActivity('stockDeleted', { type: 'stock', name: stockData.stockName });
+    showToast('Deleted successfully');
+    navigateTo('stock');
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <button className="btn-back" onClick={() => navigateTo('stock')}>
+          <i className="ti ti-arrow-left"></i>
+        </button>
+        <h2 style={{ fontSize: '18px', margin: 0 }}>Edit Stock</h2>
+      </div>
+      <div className="page-content">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="form-group">
+            <label>{t('stockName')}</label>
+            <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
+          </div>
+          <div className="form-row">
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label>{t('yarnType')}</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input 
+                  type="text" 
+                  value={stockForm.yarnType} 
+                  onChange={(e) => setStockForm({...stockForm, yarnType: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleDropdownToggle('yarnType')}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+                >
+                  <i className="ti ti-chevron-down"></i>
+                </button>
+              </div>
+              {showDropdown === 'yarnType' && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 100,
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  marginTop: '4px'
+                }}>
+                  {dropdownOptions.map((opt, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleDropdownSelect('yarnType', opt)}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                  {dropdownOptions.length === 0 && (
+                    <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label>{t('color')}</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input 
+                  type="text" 
+                  value={stockForm.color} 
+                  onChange={(e) => setStockForm({...stockForm, color: e.target.value})} 
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => handleDropdownToggle('color')}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+                >
+                  <i className="ti ti-chevron-down"></i>
+                </button>
+              </div>
+              {showDropdown === 'color' && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 100,
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  marginTop: '4px'
+                }}>
+                  {dropdownOptions.map((opt, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleDropdownSelect('color', opt)}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                  {dropdownOptions.length === 0 && (
+                    <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('lotNumber')}</label>
+              <input type="text" value={stockForm.lotNumber} onChange={(e) => setStockForm({...stockForm, lotNumber: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>{t('numBags')}</label>
+              <input type="number" value={stockForm.numBags} onChange={(e) => setStockForm({...stockForm, numBags: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('weightPerBag')}</label>
+              <input type="number" step="0.001" value={stockForm.weightPerBag} onChange={(e) => setStockForm({...stockForm, weightPerBag: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>{t('totalWeight')}</label>
+              <input type="number" step="0.001" value={stockForm.totalWeight} onChange={(e) => setStockForm({...stockForm, totalWeight: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('purchasePrice')}</label>
+              <input type="number" value={stockForm.purchasePrice} onChange={(e) => setStockForm({...stockForm, purchasePrice: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>{t('purchaseDate')}</label>
+              <input type="date" value={stockForm.purchaseDate} onChange={(e) => setStockForm({...stockForm, purchaseDate: e.target.value})} />
+            </div>
+          </div>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>{t('supplierName')}</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input 
+                type="text" 
+                value={stockForm.supplierName} 
+                onChange={(e) => setStockForm({...stockForm, supplierName: e.target.value})} 
+                style={{ flex: 1 }}
+              />
+              <button 
+                type="button"
+                onClick={() => handleDropdownToggle('supplierName')}
+                style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+              >
+                <i className="ti ti-chevron-down"></i>
+              </button>
+            </div>
+            {showDropdown === 'supplierName' && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                marginTop: '4px'
+              }}>
+                {dropdownOptions.map((opt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleDropdownSelect('supplierName', opt)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    {opt}
+                  </div>
+                ))}
+                {dropdownOptions.length === 0 && (
+                  <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>{t('stockNotes')}</label>
+            <textarea value={stockForm.notes} onChange={(e) => setStockForm({...stockForm, notes: e.target.value})} rows="3"></textarea>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => navigateTo('stock')}>{t('cancel')}</button>
+            <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={deleteStock}>{t('deleteStock')}</button>
+            <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={saveStock}>{t('save')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// COMPONENT: EMPLOYEE DETAILS PAGE
+// ==========================================
+function EmployeeDetailsPage({ db, t, lang, setDb, showToast, navigateTo, addActivity, employeeData }) {
+  const [employeeForm, setEmployeeForm] = useState({
+    fullName: '',
+    employeeId: '',
+    fatherName: '',
+    motherName: '',
+    phone: '',
+    bloodGroup: 'O+',
+    dob: '',
+    aadhaar: '',
+    payType: 'production',
+    shift: 'Morning',
+    rate: '',
+    joiningDate: '',
+    address: '',
+    designation: '',
+    department: '',
+    salary: '',
+    status: 'Active',
+    photo: ''
+  });
+
+  // Initialize form with employee data when component mounts or employeeData changes
+  useEffect(() => {
+    if (employeeData) {
+      setEmployeeForm({
+        fullName: employeeData.name || '',
+        employeeId: employeeData.id || '',
+        fatherName: employeeData.fatherName || '',
+        motherName: employeeData.motherName || '',
+        phone: employeeData.phone || '',
+        bloodGroup: employeeData.bloodGroup || 'O+',
+        dob: employeeData.dob || '',
+        aadhaar: employeeData.aadhaar || '',
+        payType: employeeData.payType || 'production',
+        shift: employeeData.shift || 'Morning',
+        rate: employeeData.rate?.toString() || '',
+        joiningDate: employeeData.joiningDate || '',
+        address: employeeData.address || '',
+        designation: employeeData.designation || employeeData.payType || '',
+        department: employeeData.department || '',
+        salary: employeeData.rate?.toString() || '',
+        status: employeeData.status || 'Active',
+        photo: employeeData.photo || ''
+      });
+    }
+  }, [employeeData]);
+
+  // Dropdown states
+  const [showDropdown, setShowDropdown] = useState(null);
+  const [dropdownOptions, setDropdownOptions] = useState([]);
+
+  const getUniqueValues = (field, dataArray) => {
+    const values = dataArray.map(item => item[field]).filter(Boolean);
+    return [...new Set(values)];
+  };
+
+  const getEmployeeDropdownOptions = (field) => {
+    if (field === 'designation') return getUniqueValues('designation', db.employees).concat(getUniqueValues('payType', db.employees));
+    if (field === 'department') return getUniqueValues('department', db.employees);
+    return [];
+  };
+
+  const handleDropdownToggle = (field) => {
+    const options = getEmployeeDropdownOptions(field);
+    setDropdownOptions(options);
+    setShowDropdown(showDropdown === field ? null : field);
+  };
+
+  const handleDropdownSelect = (field, value) => {
+    setEmployeeForm(prev => ({ ...prev, [field]: value }));
+    setShowDropdown(null);
+  };
+
+  const saveEmployee = () => {
+    if (!employeeForm.fullName || !employeeForm.employeeId) {
+      showToast('Please fill all required fields', 'error');
+      return;
+    }
+
+    const updatedEmployee = {
+      ...employeeData,
+      name: employeeForm.fullName,
+      fatherName: employeeForm.fatherName,
+      motherName: employeeForm.motherName,
+      phone: employeeForm.phone,
+      bloodGroup: employeeForm.bloodGroup,
+      dob: employeeForm.dob,
+      aadhaar: employeeForm.aadhaar,
+      payType: employeeForm.payType,
+      shift: employeeForm.shift,
+      rate: parseFloat(employeeForm.rate) || 0,
+      joiningDate: employeeForm.joiningDate,
+      address: employeeForm.address,
+      designation: employeeForm.designation,
+      department: employeeForm.department,
+      status: employeeForm.status,
+      photo: employeeForm.photo,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    const updatedEmployees = db.employees.map(e => e.id === employeeData.id ? updatedEmployee : e);
+    setDb(prev => ({ ...prev, employees: updatedEmployees }));
+    addActivity('employeeUpdated', { type: 'employee', name: updatedEmployee.name });
+    showToast('Saved successfully');
+    navigateTo('stock');
+  };
+
+  const deleteEmployee = () => {
+    const updatedEmployees = db.employees.filter(e => e.id !== employeeData.id);
+    setDb(prev => ({ ...prev, employees: updatedEmployees }));
+    addActivity('employeeDeleted', { type: 'employee', name: employeeData.name });
+    showToast('Deleted successfully');
+    navigateTo('stock');
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <button className="btn-back" onClick={() => navigateTo('stock')}>
+          <i className="ti ti-arrow-left"></i>
+        </button>
+        <h2 style={{ fontSize: '18px', margin: 0 }}>{t('viewDetails')}</h2>
+      </div>
+      <div className="page-content">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Employee Photo */}
+          <div className="form-group">
+            <label>Employee Photo</label>
+            {employeeForm.photo ? (
+              <div style={{ position: 'relative' }}>
+                <img src={employeeForm.photo} className="photo-preview" alt="Employee Photo" style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'cover' }} />
+              </div>
+            ) : (
+              <div style={{ padding: '20px', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-sm)', textAlign: 'center', color: 'var(--text-muted)' }}>
+                No photo
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Full Name</label>
+            <input type="text" value={employeeForm.fullName} onChange={(e) => setEmployeeForm({...employeeForm, fullName: e.target.value})} />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Father Name</label>
+              <input type="text" value={employeeForm.fatherName} onChange={(e) => setEmployeeForm({...employeeForm, fatherName: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Mother Name</label>
+              <input type="text" value={employeeForm.motherName} onChange={(e) => setEmployeeForm({...employeeForm, motherName: e.target.value})} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Mobile Number</label>
+              <input type="tel" value={employeeForm.phone} onChange={(e) => setEmployeeForm({...employeeForm, phone: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Blood Group</label>
+              <select value={employeeForm.bloodGroup} onChange={(e) => setEmployeeForm({...employeeForm, bloodGroup: e.target.value})}>
+                <option value="A+">A+</option><option value="A-">A-</option>
+                <option value="B+">B+</option><option value="B-">B-</option>
+                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                <option value="O+">O+</option><option value="O-">O-</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Date of Birth</label>
+              <input type="date" value={employeeForm.dob} onChange={(e) => setEmployeeForm({...employeeForm, dob: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Aadhaar</label>
+              <input type="text" value={employeeForm.aadhaar} onChange={(e) => setEmployeeForm({...employeeForm, aadhaar: e.target.value})} maxLength="12" />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Pay Type</label>
+              <select value={employeeForm.payType} onChange={(e) => setEmployeeForm({...employeeForm, payType: e.target.value})}>
+                <option value="production">Bag Production (Piece Rate)</option>
+                <option value="shift">Shift Based (Daily Wages)</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Shift</label>
+              <select value={employeeForm.shift} onChange={(e) => setEmployeeForm({...employeeForm, shift: e.target.value})}>
+                <option value="Morning">Morning</option>
+                <option value="Night">Night</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>{employeeForm.payType === 'production' ? 'Rate per Bag' : 'Rate per Shift'} (₹)</label>
+            <input type="number" value={employeeForm.rate} onChange={(e) => setEmployeeForm({...employeeForm, rate: e.target.value})} />
+          </div>
+
+          <div className="form-group">
+            <label>Joining Date</label>
+            <input type="date" value={employeeForm.joiningDate} onChange={(e) => setEmployeeForm({...employeeForm, joiningDate: e.target.value})} />
+          </div>
+
+          <div className="form-group">
+            <label>Address</label>
+            <textarea value={employeeForm.address} onChange={(e) => setEmployeeForm({...employeeForm, address: e.target.value})} rows="2"></textarea>
+          </div>
+
+          <div className="form-group">
+            <label>{t('employeeStatus')}</label>
+            <select value={employeeForm.status} onChange={(e) => setEmployeeForm({...employeeForm, status: e.target.value})}>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => navigateTo('stock')}>{t('cancel')}</button>
+            <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={deleteEmployee}>{t('deleteEmployee')}</button>
+            <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={saveEmployee}>{t('saveEmployee')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// COMPONENT: INWARD EDIT PAGE
+// ==========================================
+function InwardEditPage({ db, t, lang, setDb, showToast, navigateTo, addActivity, inwardData }) {
+  const [inwardForm, setInwardForm] = useState({
+    id: '',
+    date: '',
+    supplier: '',
+    color: '',
+    bags: '',
+    kgPerBag: '',
+    totalKg: '',
+    notes: ''
+  });
+
+  // Dropdown states
+  const [showDropdown, setShowDropdown] = useState(null);
+  const [dropdownOptions, setDropdownOptions] = useState([]);
+
+  // Initialize form with inward data when component mounts or inwardData changes
+  useEffect(() => {
+    if (inwardData) {
+      setInwardForm({
+        id: inwardData.id,
+        date: inwardData.date,
+        supplier: inwardData.supplier,
+        color: inwardData.color,
+        bags: inwardData.bags?.toString() || '',
+        kgPerBag: inwardData.kgPerBag?.toString() || '',
+        totalKg: inwardData.totalKg?.toString() || '',
+        notes: inwardData.notes || ''
+      });
+    }
+  }, [inwardData]);
+
+  const getUniqueValues = (field, dataArray) => {
+    const values = dataArray.map(item => item[field]).filter(Boolean);
+    return [...new Set(values)];
+  };
+
+  const getStockDropdownOptions = (field) => {
+    if (field === 'supplierName') return getUniqueValues('supplier', db.inward);
+    if (field === 'color') return getUniqueValues('color', db.stock).concat(getUniqueValues('color', db.inward));
+    return [];
+  };
+
+  const handleDropdownToggle = (field) => {
+    const options = getStockDropdownOptions(field);
+    setDropdownOptions(options);
+    setShowDropdown(showDropdown === field ? null : field);
+  };
+
+  const handleDropdownSelect = (field, value) => {
+    setInwardForm(prev => ({ ...prev, [field]: value }));
+    setShowDropdown(null);
+  };
+
+  const saveInward = () => {
+    if (!inwardForm.supplier || !inwardForm.color || !inwardForm.bags) {
+      showToast('Please fill all required fields', 'error');
+      return;
+    }
+
+    const updatedInward = {
+      id: inwardForm.id,
+      date: inwardForm.date,
+      supplier: inwardForm.supplier,
+      color: inwardForm.color,
+      bags: parseInt(inwardForm.bags) || 0,
+      kgPerBag: parseFloat(inwardForm.kgPerBag) || 0,
+      totalKg: parseFloat(inwardForm.totalKg) || (parseInt(inwardForm.bags) || 0) * (parseFloat(inwardForm.kgPerBag) || 0),
+      notes: inwardForm.notes
+    };
+
+    // Calculate stock difference and update stock
+    const oldInward = db.inward.find(item => item.id === inwardData.id);
+    let updatedStock = [...db.stock];
+    
+    if (oldInward) {
+      const oldKg = oldInward.totalKg || 0;
+      const oldBags = oldInward.bags || 0;
+      const oldColor = oldInward.color;
+      const newKg = updatedInward.totalKg || 0;
+      const newBags = updatedInward.bags || 0;
+      const newColor = inwardForm.color;
+      
+      // If color changed, remove from old color and add to new color
+      if (oldColor.toLowerCase() !== newColor.toLowerCase()) {
+        // Remove from old color
+        const oldStockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === oldColor.toLowerCase());
+        if (oldStockIdx !== -1) {
+          updatedStock[oldStockIdx].kg -= oldKg;
+          updatedStock[oldStockIdx].bags -= oldBags;
+          if (updatedStock[oldStockIdx].bags <= 0) {
+            updatedStock[oldStockIdx].bags = 0;
+            updatedStock[oldStockIdx].kg = 0;
+          }
+        }
+        
+        // Add to new color
+        const newStockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === newColor.toLowerCase());
+        if (newStockIdx !== -1) {
+          updatedStock[newStockIdx].kg += newKg;
+          updatedStock[newStockIdx].bags += newBags;
+        } else if (newKg > 0) {
+          updatedStock.push({
+            id: 'STK-' + Date.now(),
+            color: newColor,
+            kg: newKg,
+            bags: newBags,
+            createdAt: new Date().toISOString().split('T')[0]
+          });
+        }
+      } else {
+        // Same color, just update the difference
+        const kgDiff = newKg - oldKg;
+        const bagsDiff = newBags - oldBags;
+        
+        const stockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === newColor.toLowerCase());
+        
+        if (stockIdx !== -1) {
+          updatedStock[stockIdx].kg += kgDiff;
+          updatedStock[stockIdx].bags += bagsDiff;
+        } else if (kgDiff > 0) {
+          updatedStock.push({
+            id: 'STK-' + Date.now(),
+            color: newColor,
+            kg: kgDiff,
+            bags: bagsDiff,
+            createdAt: new Date().toISOString().split('T')[0]
+          });
+        }
+      }
+    }
+
+    const updatedInwardList = db.inward.map(item => item.id === inwardForm.id ? updatedInward : item);
+    setDb(prev => ({ ...prev, inward: updatedInwardList, stock: updatedStock }));
+    addActivity('inwardUpdated', { type: 'inward', id: updatedInward.id, kg: updatedInward.totalKg });
+    showToast('Saved successfully');
+    navigateTo('stock');
+  };
+
+  const deleteInward = () => {
+    // Remove stock that was added by this inward entry
+    let updatedStock = [...db.stock];
+    const stockIdx = updatedStock.findIndex(item => item.color === inwardData.color);
+    
+    if (stockIdx !== -1) {
+      updatedStock[stockIdx].kg -= (inwardData.totalKg || 0);
+      updatedStock[stockIdx].bags -= (inwardData.bags || 0);
+      
+      // Remove stock item if it becomes zero
+      if (updatedStock[stockIdx].bags <= 0) {
+        updatedStock[stockIdx].bags = 0;
+        updatedStock[stockIdx].kg = 0;
+      }
+    }
+
+    const updatedInward = db.inward.filter(item => item.id !== inwardData.id);
+    setDb(prev => ({ ...prev, inward: updatedInward, stock: updatedStock }));
+    addActivity('inwardDeleted', { type: 'inward', id: inwardData.id, kg: inwardData.totalKg });
+    showToast('Inward entry deleted');
+    navigateTo('stock');
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <button className="btn-back" onClick={() => navigateTo('stock')}>
+          <i className="ti ti-arrow-left"></i>
+        </button>
+        <h2 style={{ fontSize: '18px', margin: 0 }}>Edit Inward Entry</h2>
+      </div>
+      <div className="page-content">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="form-group">
+            <label>ID</label>
+            <input type="text" value={inwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
+          </div>
+          <div className="form-group">
+            <label>Date</label>
+            <input type="date" value={inwardForm.date} onChange={(e) => setInwardForm({...inwardForm, date: e.target.value})} />
+          </div>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>Supplier</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input 
+                type="text" 
+                value={inwardForm.supplier} 
+                onChange={(e) => setInwardForm({...inwardForm, supplier: e.target.value})} 
+                style={{ flex: 1 }}
+              />
+              <button 
+                type="button"
+                onClick={() => handleDropdownToggle('supplierName')}
+                style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+              >
+                <i className="ti ti-chevron-down"></i>
+              </button>
+            </div>
+            {showDropdown === 'supplierName' && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                marginTop: '4px'
+              }}>
+                {dropdownOptions.map((opt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleDropdownSelect('supplier', opt)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    {opt}
+                  </div>
+                ))}
+                {dropdownOptions.length === 0 && (
+                  <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>Color</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input 
+                type="text" 
+                value={inwardForm.color} 
+                onChange={(e) => setInwardForm({...inwardForm, color: e.target.value})} 
+                style={{ flex: 1 }}
+              />
+              <button 
+                type="button"
+                onClick={() => handleDropdownToggle('color')}
+                style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+              >
+                <i className="ti ti-chevron-down"></i>
+              </button>
+            </div>
+            {showDropdown === 'color' && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                marginTop: '4px'
+              }}>
+                {dropdownOptions.map((opt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleDropdownSelect('color', opt)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    {opt}
+                  </div>
+                ))}
+                {dropdownOptions.length === 0 && (
+                  <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Bags</label>
+              <input type="number" value={inwardForm.bags} onChange={(e) => {
+                const bags = e.target.value;
+                const kgPerBag = inwardForm.kgPerBag;
+                const totalKg = (parseFloat(bags) || 0) * (parseFloat(kgPerBag) || 0);
+                setInwardForm({...inwardForm, bags, totalKg: totalKg.toFixed(3)});
+              }} />
+            </div>
+            <div className="form-group">
+              <label>KG Per Bag</label>
+              <input type="number" step="0.001" value={inwardForm.kgPerBag} onChange={(e) => {
+                const kgPerBag = e.target.value;
+                const bags = inwardForm.bags;
+                const totalKg = (parseFloat(bags) || 0) * (parseFloat(kgPerBag) || 0);
+                setInwardForm({...inwardForm, kgPerBag, totalKg: totalKg.toFixed(3)});
+              }} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Total KG (Auto-calculated)</label>
+            <input type="number" step="0.001" value={inwardForm.totalKg} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
+          </div>
+          <div className="form-group">
+            <label>Notes</label>
+            <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => navigateTo('stock')}>{t('cancel')}</button>
+            <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={deleteInward}>Delete</button>
+            <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={saveInward}>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// COMPONENT: OUTWARD EDIT PAGE
+// ==========================================
+function OutwardEditPage({ db, t, lang, setDb, showToast, navigateTo, addActivity, outwardData }) {
+  const [outwardForm, setOutwardForm] = useState({
+    id: '',
+    date: '',
+    partyName: '',
+    color: '',
+    bags: '',
+    kgPerBag: '',
+    totalKg: ''
+  });
+
+  // Dropdown states
+  const [showDropdown, setShowDropdown] = useState(null);
+  const [dropdownOptions, setDropdownOptions] = useState([]);
+
+  // Initialize form with outward data when component mounts or outwardData changes
+  useEffect(() => {
+    if (outwardData) {
+      setOutwardForm({
+        id: outwardData.id,
+        date: outwardData.date,
+        partyName: outwardData.partyName,
+        color: outwardData.color,
+        bags: outwardData.bags?.toString() || '',
+        kgPerBag: outwardData.kgPerBag?.toString() || '',
+        totalKg: outwardData.totalKg?.toString() || ''
+      });
+    }
+  }, [outwardData]);
+
+  const getUniqueValues = (field, dataArray) => {
+    const values = dataArray.map(item => item[field]).filter(Boolean);
+    return [...new Set(values)];
+  };
+
+  const getStockDropdownOptions = (field) => {
+    if (field === 'partyName') return getUniqueValues('partyName', db.outward);
+    if (field === 'color') return getUniqueValues('color', db.stock).concat(getUniqueValues('color', db.outward));
+    return [];
+  };
+
+  const handleDropdownToggle = (field) => {
+    const options = getStockDropdownOptions(field);
+    setDropdownOptions(options);
+    setShowDropdown(showDropdown === field ? null : field);
+  };
+
+  const handleDropdownSelect = (field, value) => {
+    setOutwardForm(prev => ({ ...prev, [field]: value }));
+    setShowDropdown(null);
+  };
+
+  const saveOutward = () => {
+    if (!outwardForm.partyName || !outwardForm.color || !outwardForm.bags) {
+      showToast('Please fill all required fields', 'error');
+      return;
+    }
+
+    const updatedOutward = {
+      id: outwardForm.id,
+      date: outwardForm.date,
+      partyName: outwardForm.partyName,
+      color: outwardForm.color,
+      bags: parseInt(outwardForm.bags) || 0,
+      kgPerBag: parseFloat(outwardForm.kgPerBag) || 0,
+      totalKg: parseFloat(outwardForm.totalKg) || (parseInt(outwardForm.bags) || 0) * (parseFloat(outwardForm.kgPerBag) || 0)
+    };
+
+    // Calculate stock difference and update stock using FIFO logic
+    const oldOutward = db.outward.find(item => item.id === outwardData.id);
+    let updatedStock = [...db.stock];
+    
+    if (oldOutward) {
+      const oldKg = oldOutward.totalKg || 0;
+      const oldBags = oldOutward.bags || 0;
+      const oldColor = oldOutward.color;
+      const newKg = updatedOutward.totalKg || 0;
+      const newBags = updatedOutward.bags || 0;
+      const newColor = outwardForm.color;
+      
+      // If color changed, restore to old color and deduct from new color
+      if (oldColor.toLowerCase() !== newColor.toLowerCase()) {
+        // Restore to old color (add back the old deduction)
+        const oldStockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === oldColor.toLowerCase());
+        if (oldStockIdx !== -1) {
+          updatedStock[oldStockIdx].kg += oldKg;
+          updatedStock[oldStockIdx].bags += oldBags;
+        }
+        
+        // Deduct from new color using FIFO logic
+        const matchingStockItems = updatedStock.filter(item => item.color.toLowerCase() === newColor.toLowerCase());
+        const totalAvailableBags = matchingStockItems.reduce((sum, item) => sum + item.bags, 0);
+        const totalAvailableKg = matchingStockItems.reduce((sum, item) => sum + item.kg, 0);
+        
+        if (matchingStockItems.length === 0) {
+          showToast(`No stock found for color: ${newColor}`, 'error');
+          return;
+        }
+        
+        if (totalAvailableBags < newBags) {
+          showToast(`Insufficient stock. Available: ${totalAvailableBags} bags (${totalAvailableKg.toFixed(2)} KG), Required: ${newBags} bags (${newKg.toFixed(2)} KG)`, 'error');
+          return;
+        }
+        
+        // Deduct using FIFO
+        let bagsToDeduct = newBags;
+        let kgToDeduct = newKg;
+        matchingStockItems.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+        
+        for (let i = 0; i < matchingStockItems.length && bagsToDeduct > 0; i++) {
+          const stockItem = matchingStockItems[i];
+          const stockIdx = updatedStock.findIndex(item => item.id === stockItem.id);
+          
+          if (stockIdx === -1) continue;
+          
+          const deductBags = Math.min(bagsToDeduct, updatedStock[stockIdx].bags);
+          const deductKg = (deductBags / newBags) * kgToDeduct;
+          
+          updatedStock[stockIdx].bags -= deductBags;
+          updatedStock[stockIdx].kg -= deductKg;
+          
+          if (updatedStock[stockIdx].bags <= 0) {
+            updatedStock[stockIdx].bags = 0;
+            updatedStock[stockIdx].kg = 0;
+          }
+          
+          bagsToDeduct -= deductBags;
+          kgToDeduct -= deductKg;
+        }
+      } else {
+        // Same color - restore old and apply new using FIFO
+        const oldStockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === oldColor.toLowerCase());
+        if (oldStockIdx !== -1) {
+          updatedStock[oldStockIdx].kg += oldKg;
+          updatedStock[oldStockIdx].bags += oldBags;
+        }
+        
+        // Deduct new using FIFO
+        const matchingStockItems = updatedStock.filter(item => item.color.toLowerCase() === newColor.toLowerCase());
+        const totalAvailableBags = matchingStockItems.reduce((sum, item) => sum + item.bags, 0);
+        const totalAvailableKg = matchingStockItems.reduce((sum, item) => sum + item.kg, 0);
+        
+        if (matchingStockItems.length === 0) {
+          showToast(`No stock found for color: ${newColor}`, 'error');
+          return;
+        }
+        
+        if (totalAvailableBags < newBags) {
+          showToast(`Insufficient stock. Available: ${totalAvailableBags} bags (${totalAvailableKg.toFixed(2)} KG), Required: ${newBags} bags (${newKg.toFixed(2)} KG)`, 'error');
+          return;
+        }
+        
+        let bagsToDeduct = newBags;
+        let kgToDeduct = newKg;
+        matchingStockItems.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+        
+        for (let i = 0; i < matchingStockItems.length && bagsToDeduct > 0; i++) {
+          const stockItem = matchingStockItems[i];
+          const stockIdx = updatedStock.findIndex(item => item.id === stockItem.id);
+          
+          if (stockIdx === -1) continue;
+          
+          const deductBags = Math.min(bagsToDeduct, updatedStock[stockIdx].bags);
+          const deductKg = (deductBags / newBags) * kgToDeduct;
+          
+          updatedStock[stockIdx].bags -= deductBags;
+          updatedStock[stockIdx].kg -= deductKg;
+          
+          if (updatedStock[stockIdx].bags <= 0) {
+            updatedStock[stockIdx].bags = 0;
+            updatedStock[stockIdx].kg = 0;
+          }
+          
+          bagsToDeduct -= deductBags;
+          kgToDeduct -= deductKg;
+        }
+      }
+    }
+
+    const updatedOutwardList = db.outward.map(item => item.id === outwardForm.id ? updatedOutward : item);
+    setDb(prev => ({ ...prev, outward: updatedOutwardList, stock: updatedStock }));
+    addActivity('outwardUpdated', { type: 'outward', id: updatedOutward.id, kg: updatedOutward.totalKg });
+    showToast('Saved successfully');
+    navigateTo('stock');
+  };
+
+  const deleteOutward = () => {
+    // Restore stock that was deducted by this outward entry
+    let updatedStock = [...db.stock];
+    const stockIdx = updatedStock.findIndex(item => item.color.toLowerCase() === outwardData.color.toLowerCase());
+    
+    if (stockIdx !== -1) {
+      updatedStock[stockIdx].kg += (outwardData.totalKg || 0);
+      updatedStock[stockIdx].bags += (outwardData.bags || 0);
+    }
+
+    const updatedOutward = db.outward.filter(item => item.id !== outwardData.id);
+    setDb(prev => ({ ...prev, outward: updatedOutward, stock: updatedStock }));
+    addActivity('outwardDeleted', { type: 'outward', id: outwardData.id, kg: outwardData.totalKg });
+    showToast('Outward entry deleted');
+    navigateTo('stock');
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <button className="btn-back" onClick={() => navigateTo('stock')}>
+          <i className="ti ti-arrow-left"></i>
+        </button>
+        <h2 style={{ fontSize: '18px', margin: 0 }}>Edit Outward Entry</h2>
+      </div>
+      <div className="page-content">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="form-group">
+            <label>ID</label>
+            <input type="text" value={outwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
+          </div>
+          <div className="form-group">
+            <label>Date</label>
+            <input type="date" value={outwardForm.date} onChange={(e) => setOutwardForm({...outwardForm, date: e.target.value})} />
+          </div>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>Party Name</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input 
+                type="text" 
+                value={outwardForm.partyName} 
+                onChange={(e) => setOutwardForm({...outwardForm, partyName: e.target.value})} 
+                style={{ flex: 1 }}
+              />
+              <button 
+                type="button"
+                onClick={() => handleDropdownToggle('partyName')}
+                style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+              >
+                <i className="ti ti-chevron-down"></i>
+              </button>
+            </div>
+            {showDropdown === 'partyName' && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                marginTop: '4px'
+              }}>
+                {dropdownOptions.map((opt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleDropdownSelect('partyName', opt)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    {opt}
+                  </div>
+                ))}
+                {dropdownOptions.length === 0 && (
+                  <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label>Color</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input 
+                type="text" 
+                value={outwardForm.color} 
+                onChange={(e) => setOutwardForm({...outwardForm, color: e.target.value})} 
+                style={{ flex: 1 }}
+              />
+              <button 
+                type="button"
+                onClick={() => handleDropdownToggle('color')}
+                style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
+              >
+                <i className="ti ti-chevron-down"></i>
+              </button>
+            </div>
+            {showDropdown === 'color' && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                zIndex: 100,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                marginTop: '4px'
+              }}>
+                {dropdownOptions.map((opt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleDropdownSelect('color', opt)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                  >
+                    {opt}
+                  </div>
+                ))}
+                {dropdownOptions.length === 0 && (
+                  <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Bags</label>
+              <input type="number" value={outwardForm.bags} onChange={(e) => {
+                const bags = e.target.value;
+                const kgPerBag = outwardForm.kgPerBag;
+                const totalKg = (parseFloat(bags) || 0) * (parseFloat(kgPerBag) || 0);
+                setOutwardForm({...outwardForm, bags, totalKg: totalKg.toFixed(3)});
+              }} />
+            </div>
+            <div className="form-group">
+              <label>KG Per Bag</label>
+              <input type="number" step="0.001" value={outwardForm.kgPerBag} onChange={(e) => {
+                const kgPerBag = e.target.value;
+                const bags = outwardForm.bags;
+                const totalKg = (parseFloat(bags) || 0) * (parseFloat(kgPerBag) || 0);
+                setOutwardForm({...outwardForm, kgPerBag, totalKg: totalKg.toFixed(3)});
+              }} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Total KG (Auto-calculated)</label>
+            <input type="number" step="0.001" value={outwardForm.totalKg} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => navigateTo('stock')}>{t('cancel')}</button>
+            <button type="button" className="btn btn-danger" style={{ flex: 1 }} onClick={deleteOutward}>Delete</button>
+            <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={saveOutward}>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// COMPONENT: HISTORY PAGE
+// ==========================================
+function HistoryPage({ db, t, lang, navigateTo }) {
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <button className="btn-back" onClick={() => navigateTo('home')}>
+          <i className="ti ti-arrow-left"></i>
+        </button>
+        <h2 style={{ fontSize: '18px', margin: 0 }}>History</h2>
+      </div>
+      <div className="page-content">
+        <div className="card">
+          <div className="activity-feed">
+            {db.activity.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                <i className="ti ti-history" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
+                <p>No activity history yet</p>
+              </div>
+            ) : (
+              db.activity.map((item, idx) => {
+                let icon = "ti ti-info-circle";
+                let colorClass = "amber";
+                if (item.type === 'inward' || item.type === 'inwardAdded' || item.type === 'inwardUpdated') { icon = "ti ti-arrow-down-left"; colorClass = "green"; }
+                if (item.type === 'outward' || item.type === 'outwardAdded' || item.type === 'outwardUpdated') { icon = "ti ti-arrow-up-right"; colorClass = "red"; }
+                if (item.type === 'attendance') { icon = "ti ti-users"; colorClass = "amber"; }
+                if (item.type.includes('stock') || item.type.includes('yarn')) { icon = "ti ti-package"; colorClass = "green"; }
+                if (item.type.includes('employee')) { icon = "ti ti-user"; colorClass = "blue"; }
+
+                // Dynamically translate activity text
+                let activityText = item.text;
+                if (item.data) {
+                  if (item.type === 'inward') {
+                    activityText = `Received ${item.data.bags} bags ${item.data.color} from ${item.data.supplier}`;
+                  } else if (item.type === 'outward') {
+                    activityText = `Dispatched ${item.data.bags} bags ${item.data.color} to ${item.data.party}`;
+                  } else if (item.data.type) {
+                    const actionText = item.type.includes('Added') ? 'added' : item.type.includes('Updated') ? 'updated' : 'deleted';
+                    activityText = `${item.data.type} ${actionText}: ${item.data.name}`;
+                  }
+                }
+
+                return (
+                  <div className="activity-item" key={idx}>
+                    <div className="activity-left">
+                      <div className={`activity-icon-round ${colorClass}`}>
+                        <i className={icon}></i>
+                      </div>
+                      <div className="text-left" style={{ maxWidth: '300px' }}>
+                        <p style={{ fontSize: '13px', fontWeight: '700' }}>{activityText}</p>
+                        <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.timestamp}</p>
+                      </div>
+                    </div>
+                    {item.badge && (
+                      <span className={`badge-sync ${colorClass}`} style={{ fontSize: '11px', fontWeight: '800' }}>{item.badge}</span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
 // COMPONENT: STOCK INVENTORY SUBPAGE
 // ==========================================
-function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, totalStockBags, setDb, showToast, setConfirmModal, addActivity }) {
-  const [activeTab, setActiveTab] = useState('stock'); // stock, employees, yarn, inward, outward
+function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, totalStockBags, setDb, showToast, setConfirmModal, addActivity, navigateTo }) {
+  const [activeTab, setActiveTab] = useState('employees'); // employees, inward, outward, availability
+  const [showAddEmployeePage, setShowAddEmployeePage] = useState(false); // Full page for adding employee
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, stocks, employees, yarn
   const [sortBy, setSortBy] = useState('name'); // name, dateCreated, lastUpdated, quantity
   const [selectedStock, setSelectedStock] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedYarn, setSelectedYarn] = useState(null);
-  const [showStockModal, setShowStockModal] = useState(false);
-  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
-  const [showInwardModal, setShowInwardModal] = useState(false);
-  const [showOutwardModal, setShowOutwardModal] = useState(false);
-  const [isAddingStock, setIsAddingStock] = useState(false);
-  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
-  const [isEditingInward, setIsEditingInward] = useState(false);
-  const [isEditingOutward, setIsEditingOutward] = useState(false);
   const [selectedInward, setSelectedInward] = useState(null);
   const [selectedOutward, setSelectedOutward] = useState(null);
   
@@ -2924,19 +4735,30 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
       const suggestions = [];
       const term = value.toLowerCase();
       
-      // Get suggestions from all tabs
-      db.stock.forEach(item => {
-        if (item.stockName?.toLowerCase().includes(term) || item.color?.toLowerCase().includes(term)) {
-          suggestions.push({ type: 'stock', name: item.stockName || item.color, id: item.id });
-        }
-      });
-      
+      // Get suggestions from employees, inward, and outward
       db.employees.forEach(item => {
         if (item.name?.toLowerCase().includes(term) || item.id?.toLowerCase().includes(term)) {
           suggestions.push({ type: 'employee', name: item.name, id: item.id });
         }
       });
       
+      db.inward.forEach(item => {
+        if (item.supplier?.toLowerCase().includes(term) || item.color?.toLowerCase().includes(term)) {
+          suggestions.push({ type: 'inward', name: item.supplier + ' - ' + item.color, id: item.id });
+        }
+      });
+      
+      db.outward.forEach(item => {
+        if (item.partyName?.toLowerCase().includes(term) || item.color?.toLowerCase().includes(term)) {
+          suggestions.push({ type: 'outward', name: item.partyName + ' - ' + item.color, id: item.id });
+        }
+      });
+      
+      db.stock.forEach(item => {
+        if (item.stockName?.toLowerCase().includes(term) || item.color?.toLowerCase().includes(term)) {
+          suggestions.push({ type: 'availability', name: item.stockName + ' - ' + item.color, id: item.id });
+        }
+      });
       
       setSearchSuggestions(suggestions.slice(0, 8));
       setShowSearchSuggestions(true);
@@ -2950,45 +4772,26 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
     setShowSearchSuggestions(false);
     
     // Switch to appropriate tab and select item
-    if (suggestion.type === 'stock') {
-      setActiveTab('stock');
-      const stock = db.stock.find(s => s.id === suggestion.id);
-      if (stock) handleStockClick(stock);
-    } else if (suggestion.type === 'employee') {
+    if (suggestion.type === 'employee') {
       setActiveTab('employees');
       const emp = db.employees.find(e => e.id === suggestion.id);
       if (emp) handleEmployeeClick(emp);
+    } else if (suggestion.type === 'inward') {
+      setActiveTab('inward');
+      const inward = db.inward.find(i => i.id === suggestion.id);
+      if (inward) handleInwardEdit(inward);
+    } else if (suggestion.type === 'outward') {
+      setActiveTab('outward');
+      const outward = db.outward.find(o => o.id === suggestion.id);
+      if (outward) handleOutwardEdit(outward);
+    } else if (suggestion.type === 'availability') {
+      setActiveTab('availability');
+      const stock = db.stock.find(s => s.id === suggestion.id);
+      if (stock) handleStockClick(stock);
     }
   };
 
-  // Stock form state
-  const [stockForm, setStockForm] = useState({
-    stockName: '',
-    yarnType: '',
-    color: '',
-    lotNumber: '',
-    numBags: '',
-    weightPerBag: '',
-    totalWeight: '',
-    purchasePrice: '',
-    supplierName: '',
-    purchaseDate: '',
-    notes: ''
-  });
 
-  // Employee form state
-  const [employeeForm, setEmployeeForm] = useState({
-    fullName: '',
-    employeeId: '',
-    phone: '',
-    email: '',
-    address: '',
-    designation: '',
-    department: '',
-    joiningDate: '',
-    salary: '',
-    status: 'Active'
-  });
 
   // Yarn form state
   const [yarnForm, setYarnForm] = useState({
@@ -3027,29 +4830,37 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   const getFilteredItems = () => {
     let items = [];
     
-    if (activeTab === 'stock') {
-      items = db.stock || [];
-    } else if (activeTab === 'employees') {
+    if (activeTab === 'employees') {
       items = db.employees || [];
-    } else if (activeTab === 'yarn') {
-      items = db.yarn || [];
+    } else if (activeTab === 'inward') {
+      items = db.inward || [];
+    } else if (activeTab === 'outward') {
+      items = db.outward || [];
+    } else if (activeTab === 'availability') {
+      items = db.stock || [];
     }
 
     // Apply search
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       items = items.filter(item => {
-        if (activeTab === 'stock') {
-          return (item.stockName?.toLowerCase().includes(term) || 
-                  item.color?.toLowerCase().includes(term) ||
-                  item.lotNumber?.toLowerCase().includes(term));
-        } else if (activeTab === 'employees') {
+        if (activeTab === 'employees') {
           return (item.name?.toLowerCase().includes(term) || 
                   item.id?.toLowerCase().includes(term) ||
                   item.designation?.toLowerCase().includes(term));
-        } else if (activeTab === 'yarn') {
-          return (item.yarnName?.toLowerCase().includes(term) || 
-                  item.yarnCode?.toLowerCase().includes(term));
+        } else if (activeTab === 'inward') {
+          return (item.supplier?.toLowerCase().includes(term) || 
+                  item.color?.toLowerCase().includes(term) ||
+                  item.id?.toLowerCase().includes(term));
+        } else if (activeTab === 'outward') {
+          return (item.partyName?.toLowerCase().includes(term) || 
+                  item.color?.toLowerCase().includes(term) ||
+                  item.id?.toLowerCase().includes(term));
+        } else if (activeTab === 'availability') {
+          return (item.stockName?.toLowerCase().includes(term) || 
+                  item.color?.toLowerCase().includes(term) ||
+                  item.yarnType?.toLowerCase().includes(term) ||
+                  item.id?.toLowerCase().includes(term));
         }
         return false;
       });
@@ -3058,16 +4869,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
     // Apply sorting
     items = [...items].sort((a, b) => {
       if (sortBy === 'name') {
-        const nameA = activeTab === 'stock' ? a.stockName : activeTab === 'employees' ? a.name : a.yarnName;
-        const nameB = activeTab === 'stock' ? b.stockName : activeTab === 'employees' ? b.name : b.yarnName;
+        const nameA = activeTab === 'employees' ? a.name : activeTab === 'inward' ? a.supplier : activeTab === 'outward' ? a.partyName : a.stockName;
+        const nameB = activeTab === 'employees' ? b.name : activeTab === 'inward' ? b.supplier : activeTab === 'outward' ? b.partyName : b.stockName;
         return nameA?.localeCompare(nameB) || 0;
       } else if (sortBy === 'dateCreated') {
         return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       } else if (sortBy === 'lastUpdated') {
         return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
       } else if (sortBy === 'quantity') {
-        const qtyA = activeTab === 'stock' ? a.kg : activeTab === 'employees' ? 0 : a.availableQuantity;
-        const qtyB = activeTab === 'stock' ? b.kg : activeTab === 'employees' ? 0 : b.availableQuantity;
+        const qtyA = activeTab === 'inward' ? a.totalKg : activeTab === 'outward' ? a.totalKg : activeTab === 'availability' ? a.kg : 0;
+        const qtyB = activeTab === 'inward' ? b.totalKg : activeTab === 'outward' ? b.totalKg : activeTab === 'availability' ? b.kg : 0;
         return qtyB - qtyA;
       }
       return 0;
@@ -3081,128 +4892,17 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   // Stock CRUD operations
   const handleStockClick = (stock) => {
     setSelectedStock(stock);
-    setStockForm({
-      stockName: stock.stockName || '',
-      yarnType: stock.yarnType || '',
-      color: stock.color || '',
-      lotNumber: stock.lotNumber || '',
-      numBags: stock.bags?.toString() || '',
-      weightPerBag: stock.weightPerBag?.toString() || '',
-      totalWeight: stock.kg?.toString() || '',
-      purchasePrice: stock.purchasePrice?.toString() || '',
-      supplierName: stock.supplierName || '',
-      purchaseDate: stock.purchaseDate || '',
-      notes: stock.notes || ''
-    });
-    setIsAddingStock(false);
-    setShowStockModal(true);
+    navigateTo('stock_edit', stock);
   };
 
   const handleAddStock = () => {
-    setStockForm({
-      stockName: '',
-      yarnType: '',
-      color: '',
-      lotNumber: '',
-      numBags: '',
-      weightPerBag: '',
-      totalWeight: '',
-      purchasePrice: '',
-      supplierName: '',
-      purchaseDate: '',
-      notes: ''
-    });
-    setIsAddingStock(true);
-    setShowStockModal(true);
-  };
-
-  const saveStock = () => {
-    if (!stockForm.stockName || !stockForm.color || !stockForm.numBags) {
-      showToast('Please fill all required fields', 'error');
-      return;
-    }
-
-    const newStock = {
-      id: isAddingStock ? `STK-${Date.now()}` : selectedStock.id,
-      stockName: stockForm.stockName,
-      yarnType: stockForm.yarnType,
-      color: stockForm.color,
-      lotNumber: stockForm.lotNumber,
-      bags: parseInt(stockForm.numBags) || 0,
-      weightPerBag: parseFloat(stockForm.weightPerBag) || 0,
-      kg: parseFloat(stockForm.totalWeight) || (parseInt(stockForm.numBags) || 0) * (parseFloat(stockForm.weightPerBag) || 0),
-      purchasePrice: parseFloat(stockForm.purchasePrice) || 0,
-      supplierName: stockForm.supplierName,
-      purchaseDate: stockForm.purchaseDate,
-      notes: stockForm.notes,
-      createdAt: isAddingStock ? new Date().toISOString().split('T')[0] : selectedStock.createdAt,
-      updatedAt: new Date().toISOString().split('T')[0]
-    };
-
-    let updatedStock;
-    if (isAddingStock) {
-      updatedStock = [...db.stock, newStock];
-      addActivity('stockAdded', { type: 'stock', name: newStock.stockName });
-    } else {
-      updatedStock = db.stock.map(s => s.id === selectedStock.id ? newStock : s);
-      addActivity('stockUpdated', { type: 'stock', name: newStock.stockName });
-    }
-
-    setDb(prev => ({ ...prev, stock: updatedStock }));
-    setShowStockModal(false);
-    showToast('Saved successfully');
-  };
-
-  const deleteStock = () => {
-    setConfirmModal({
-      visible: true,
-      title: t('deleteStock'),
-      message: t('confirmDeleteStock'),
-      action: () => {
-        const updatedStock = db.stock.filter(s => s.id !== selectedStock.id);
-        setDb(prev => ({ ...prev, stock: updatedStock }));
-        addActivity('stockDeleted', { type: 'stock', name: selectedStock.stockName });
-        setShowStockModal(false);
-        setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast('Stock deleted successfully');
-      }
-    });
+    navigateTo('stock_add');
   };
 
   // Employee CRUD operations
   const handleEmployeeClick = (employee) => {
     setSelectedEmployee(employee);
-    setEmployeeForm({
-      fullName: employee.name || '',
-      employeeId: employee.id || '',
-      phone: employee.phone || '',
-      email: employee.email || '',
-      address: employee.address || '',
-      designation: employee.designation || employee.payType || '',
-      department: employee.department || '',
-      joiningDate: employee.joiningDate || '',
-      salary: employee.rate?.toString() || '',
-      status: employee.status || 'Active'
-    });
-    setIsAddingEmployee(false);
-    setShowEmployeeModal(true);
-  };
-
-  const handleAddEmployee = () => {
-    setEmployeeForm({
-      fullName: '',
-      employeeId: '',
-      phone: '',
-      email: '',
-      address: '',
-      designation: '',
-      department: '',
-      joiningDate: '',
-      salary: '',
-      status: 'Active'
-    });
-    setIsAddingEmployee(true);
-    setShowEmployeeModal(true);
+    navigateTo('employee_details', employee);
   };
 
   const saveEmployee = () => {
@@ -3245,6 +4945,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
     setDb(prev => ({ ...prev, employees: updatedEmployees }));
     setShowEmployeeModal(false);
+    setShowAddEmployeePage(false);
     showToast('Saved successfully');
   };
 
@@ -3344,110 +5045,16 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
   // Inward CRUD operations
   const handleInwardEdit = (inward) => {
     setSelectedInward(inward);
-    setInwardForm({
-      id: inward.id,
-      date: inward.date,
-      supplier: inward.supplier,
-      color: inward.color,
-      bags: inward.bags?.toString() || '',
-      kgPerBag: inward.kgPerBag?.toString() || '',
-      totalKg: inward.totalKg?.toString() || '',
-      notes: inward.notes || ''
-    });
-    setIsEditingInward(true);
-    setShowInwardModal(true);
+    navigateTo('inward_edit', inward);
   };
 
-  const saveInward = () => {
-    if (!inwardForm.supplier || !inwardForm.color || !inwardForm.bags) {
-      showToast('Please fill all required fields', 'error');
-      return;
-    }
-
-    const updatedInward = {
-      id: inwardForm.id,
-      date: inwardForm.date,
-      supplier: inwardForm.supplier,
-      color: inwardForm.color,
-      bags: parseInt(inwardForm.bags) || 0,
-      kgPerBag: parseFloat(inwardForm.kgPerBag) || 0,
-      totalKg: parseFloat(inwardForm.totalKg) || (parseInt(inwardForm.bags) || 0) * (parseFloat(inwardForm.kgPerBag) || 0),
-      notes: inwardForm.notes
-    };
-
-    const updatedInwardList = db.inward.map(item => item.id === inwardForm.id ? updatedInward : item);
-    setDb(prev => ({ ...prev, inward: updatedInwardList }));
-    setShowInwardModal(false);
-    showToast('Saved successfully');
-  };
-
-  const deleteInward = () => {
-    setConfirmModal({
-      visible: true,
-      title: t('deleteInwardEntry'),
-      message: t('confirmDeleteInward'),
-      action: () => {
-        const updatedInward = db.inward.filter(item => item.id !== selectedInward.id);
-        setDb(prev => ({ ...prev, inward: updatedInward }));
-        setShowInwardModal(false);
-        setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast('Inward entry deleted');
-      }
-    });
-  };
 
   // Outward CRUD operations
   const handleOutwardEdit = (outward) => {
     setSelectedOutward(outward);
-    setOutwardForm({
-      id: outward.id,
-      date: outward.date,
-      partyName: outward.partyName,
-      color: outward.color,
-      bags: outward.bags?.toString() || '',
-      kgPerBag: outward.kgPerBag?.toString() || '',
-      totalKg: outward.totalKg?.toString() || ''
-    });
-    setIsEditingOutward(true);
-    setShowOutwardModal(true);
+    navigateTo('outward_edit', outward);
   };
 
-  const saveOutward = () => {
-    if (!outwardForm.partyName || !outwardForm.color || !outwardForm.bags) {
-      showToast('Please fill all required fields', 'error');
-      return;
-    }
-
-    const updatedOutward = {
-      id: outwardForm.id,
-      date: outwardForm.date,
-      partyName: outwardForm.partyName,
-      color: outwardForm.color,
-      bags: parseInt(outwardForm.bags) || 0,
-      kgPerBag: parseFloat(outwardForm.kgPerBag) || 0,
-      totalKg: parseFloat(outwardForm.totalKg) || (parseInt(outwardForm.bags) || 0) * (parseFloat(outwardForm.kgPerBag) || 0)
-    };
-
-    const updatedOutwardList = db.outward.map(item => item.id === outwardForm.id ? updatedOutward : item);
-    setDb(prev => ({ ...prev, outward: updatedOutwardList }));
-    setShowOutwardModal(false);
-    showToast('Saved successfully');
-  };
-
-  const deleteOutward = () => {
-    setConfirmModal({
-      visible: true,
-      title: t('deleteOutwardEntry'),
-      message: t('confirmDeleteOutward'),
-      action: () => {
-        const updatedOutward = db.outward.filter(item => item.id !== selectedOutward.id);
-        setDb(prev => ({ ...prev, outward: updatedOutward }));
-        setShowOutwardModal(false);
-        setConfirmModal(prev => ({ ...prev, visible: false }));
-        showToast('Outward entry deleted');
-      }
-    });
-  };
 
   return (
     <div className="view-panel">
@@ -3457,13 +5064,14 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
           <h1 style={{ fontSize: '24px', margin: '2px 0 0 0' }}>{totalStockKg.toFixed(1)} KG</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>{totalStockBags} Bags in Warehouse</p>
         </div>
-        <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => {
-          if (activeTab === 'stock') handleAddStock();
-          else if (activeTab === 'employees') handleAddEmployee();
-          else setBottomSheet('inward');
-        }}>
-          <i className="ti ti-plus"></i> {t('add')}
-        </button>
+        {activeTab !== 'employees' && activeTab !== 'availability' && (
+          <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => {
+            if (activeTab === 'outward') setBottomSheet('outward');
+            else setBottomSheet('inward');
+          }}>
+            <i className="ti ti-plus"></i> {t('add')}
+          </button>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -3510,7 +5118,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                 onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
                 onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
               >
-                <i className={`ti ti-${suggestion.type === 'stock' ? 'package' : suggestion.type === 'employee' ? 'users' : 'socks'}`} style={{ color: 'var(--accent-terracotta)' }}></i>
+                <i className={`ti ti-${suggestion.type === 'employee' ? 'users' : suggestion.type === 'inward' ? 'package-import' : suggestion.type === 'outward' ? 'package-export' : 'package'}`} style={{ color: 'var(--accent-terracotta)' }}></i>
                 <span style={{ fontSize: '13px' }}>{suggestion.name}</span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto', textTransform: 'capitalize' }}>{suggestion.type}</span>
               </div>
@@ -3535,40 +5143,11 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
 
       {/* Tabs */}
       <div className="tabs-header mt-12">
-        <button className={`tab-btn ${activeTab === 'stock' ? 'active' : ''}`} onClick={() => setActiveTab('stock')}>{t('stockTab')}</button>
-        <button className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>{t('employeesTab')}</button>
+        <button className={`tab-btn ${activeTab === 'availability' ? 'active' : ''}`} onClick={() => setActiveTab('availability')}>{t('availabilityTab')}</button>
         <button className={`tab-btn ${activeTab === 'inward' ? 'active' : ''}`} onClick={() => setActiveTab('inward')}>{t('inward')}</button>
         <button className={`tab-btn ${activeTab === 'outward' ? 'active' : ''}`} onClick={() => setActiveTab('outward')}>{t('outward')}</button>
+        <button className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>{t('employeesTab')}</button>
       </div>
-
-      {/* Stock Tab */}
-      {activeTab === 'stock' && (
-        <div className="card">
-          {filteredItems.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-              <i className="ti ti-package" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
-              <p>{t('emptyState')}</p>
-            </div>
-          ) : (
-            <div className="stock-list">
-              {filteredItems.map((item) => (
-                <div className="list-row" key={item.id} style={{ cursor: 'pointer' }} onClick={() => handleStockClick(item)}>
-                  <div className="row-left">
-                    <span className="row-title">{item.stockName || item.color}</span>
-                    <span className="row-subtitle">{item.bags} bags · {item.yarnType || 'N/A'}</span>
-                  </div>
-                  <div className="row-right">
-                    <span className="row-value">{item.kg.toFixed(2)} KG</span>
-                    <button className="pencil-btn" onClick={(e) => { e.stopPropagation(); handleStockClick(item); }}>
-                      <i className="ti ti-pencil"></i>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Employees Tab */}
       {activeTab === 'employees' && (
@@ -3657,261 +5236,55 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
         </div>
       )}
 
-      {/* Recent Activity */}
-      <div className="card mt-16">
-        <h3 style={{ fontSize: '15px', textAlign: 'left', marginBottom: '10px' }}>{t('recentActivity')}</h3>
-        <div className="activity-feed">
-          {db.activity.slice(0, 5).map((item, idx) => {
-            let icon = "ti ti-info-circle";
-            let colorClass = "amber";
-            if (item.type.includes('stock') || item.type.includes('yarn')) { icon = "ti ti-package"; colorClass = "green"; }
-            if (item.type.includes('employee')) { icon = "ti ti-users"; colorClass = "amber"; }
-            if (item.type.includes('Deleted')) { colorClass = "red"; }
-
-            // Dynamically translate activity text
-            let activityText = item.text;
-            if (item.data) {
-              if (item.type === 'inward') {
-                activityText = `${t('received')} ${item.data.bags} Bags ${item.data.color} ${t('from')} ${item.data.supplier}`;
-              } else if (item.type === 'outward') {
-                activityText = `${t('dispatched')} ${item.data.bags} Bags ${item.data.color} ${t('to')} ${item.data.party}`;
-              } else if (item.data.type) {
-                const actionText = item.type.includes('Added') ? t('added') : item.type.includes('Updated') ? t('updated') : t('deleted');
-                activityText = `${t(item.data.type)} ${actionText}: ${item.data.name}`;
-              }
-            }
-
-            return (
-              <div className="activity-item" key={idx}>
-                <div className="activity-left">
-                  <div className={`activity-icon-round ${colorClass}`}>
-                    <i className={icon}></i>
-                  </div>
-                  <div className="text-left" style={{ maxWidth: '240px' }}>
-                    <p style={{ fontSize: '13px', fontWeight: '700' }}>{activityText}</p>
-                    <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.timestamp}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Stock Details Modal */}
-      {showStockModal && (
-        <div className="dialog-overlay active" onClick={() => setShowStockModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingStock ? t('add') + ' ' + t('stock') : t('viewDetails')}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group">
-                <label>{t('stockName')}</label>
-                <input type="text" value={stockForm.stockName} onChange={(e) => setStockForm({...stockForm, stockName: e.target.value})} />
-              </div>
-              <div className="form-row">
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label>{t('yarnType')}</label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <input 
-                      type="text" 
-                      value={stockForm.yarnType} 
-                      onChange={(e) => setStockForm({...stockForm, yarnType: e.target.value})} 
-                      style={{ flex: 1 }}
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => handleDropdownToggle('yarnType', 'stock')}
-                      style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
-                    >
-                      <i className="ti ti-chevron-down"></i>
-                    </button>
-                  </div>
-                  {showDropdown === 'yarnType' && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      backgroundColor: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                      zIndex: 100,
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      marginTop: '4px'
-                    }}>
-                      {dropdownOptions.map((opt, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => handleDropdownSelect('yarnType', opt)}
-                          style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                          onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                        >
-                          {opt}
-                        </div>
-                      ))}
-                      {dropdownOptions.length === 0 && (
-                        <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label>{t('color')}</label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <input 
-                      type="text" 
-                      value={stockForm.color} 
-                      onChange={(e) => setStockForm({...stockForm, color: e.target.value})} 
-                      style={{ flex: 1 }}
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => handleDropdownToggle('color', 'stock')}
-                      style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
-                    >
-                      <i className="ti ti-chevron-down"></i>
-                    </button>
-                  </div>
-                  {showDropdown === 'color' && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      backgroundColor: 'white',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                      zIndex: 100,
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      marginTop: '4px'
-                    }}>
-                      {dropdownOptions.map((opt, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => handleDropdownSelect('color', opt)}
-                          style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                          onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
-                          onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                        >
-                          {opt}
-                        </div>
-                      ))}
-                      {dropdownOptions.length === 0 && (
-                        <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>{t('lotNumber')}</label>
-                  <input type="text" value={stockForm.lotNumber} onChange={(e) => setStockForm({...stockForm, lotNumber: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>{t('numBags')}</label>
-                  <input type="number" value={stockForm.numBags} onChange={(e) => setStockForm({...stockForm, numBags: e.target.value})} />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>{t('weightPerBag')}</label>
-                  <input type="number" step="0.001" value={stockForm.weightPerBag} onChange={(e) => setStockForm({...stockForm, weightPerBag: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>{t('totalWeight')}</label>
-                  <input type="number" step="0.001" value={stockForm.totalWeight} onChange={(e) => setStockForm({...stockForm, totalWeight: e.target.value})} />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>{t('purchasePrice')}</label>
-                  <input type="number" value={stockForm.purchasePrice} onChange={(e) => setStockForm({...stockForm, purchasePrice: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>{t('purchaseDate')}</label>
-                  <input type="date" value={stockForm.purchaseDate} onChange={(e) => setStockForm({...stockForm, purchaseDate: e.target.value})} />
-                </div>
-              </div>
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label>{t('supplierName')}</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input 
-                    type="text" 
-                    value={stockForm.supplierName} 
-                    onChange={(e) => setStockForm({...stockForm, supplierName: e.target.value})} 
-                    style={{ flex: 1 }}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => handleDropdownToggle('supplierName', 'stock')}
-                    style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
-                  >
-                    <i className="ti ti-chevron-down"></i>
-                  </button>
-                </div>
-                {showDropdown === 'supplierName' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 100,
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    marginTop: '4px'
-                  }}>
-                    {dropdownOptions.map((opt, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleDropdownSelect('supplierName', opt)}
-                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                      >
-                        {opt}
-                      </div>
-                    ))}
-                    {dropdownOptions.length === 0 && (
-                      <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="form-group">
-                <label>{t('stockNotes')}</label>
-                <textarea value={stockForm.notes} onChange={(e) => setStockForm({...stockForm, notes: e.target.value})} rows="3"></textarea>
-              </div>
-              <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowStockModal(false)}>{t('cancel')}</button>
-                {!isAddingStock && (
-                  <button type="button" className="btn btn-danger" onClick={deleteStock}>{t('deleteStock')}</button>
-                )}
-                <button type="button" className="btn btn-primary" onClick={saveStock}>{t('saveStock')}</button>
-              </div>
+      {/* Availability Tab */}
+      {activeTab === 'availability' && (
+        <div className="availability-history">
+          {filteredItems.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+              <i className="ti ti-package" style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}></i>
+              <p>{t('emptyState')}</p>
             </div>
-          </div>
+          ) : (
+            filteredItems.map((item, idx) => (
+              <div 
+                className="history-card" 
+                key={idx} 
+                onClick={() => handleStockClick(item)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="history-header">
+                  <span className="history-party">{item.stockName}</span>
+                  <span className="history-badge availability">{t('availableStock')}</span>
+                </div>
+                <div className="history-details">
+                  <span>{item.color} · {item.yarnType}</span>
+                  <span style={{ fontWeight: 'bold', color: 'var(--green)' }}>{item.bags} {t('availableBags')}</span>
+                </div>
+                <div className="history-details">
+                  <span>{item.supplierName || 'N/A'}</span>
+                  <span style={{ fontWeight: 'bold', color: 'var(--accent-terracotta)' }}>{item.kg?.toFixed(2) || 0} {t('availableKg')}</span>
+                </div>
+                <div className="history-details" style={{ fontSize: '10px', marginTop: '4px' }}>
+                  <span>{item.purchaseDate || 'N/A'}</span>
+                  <span>{item.id}</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 
-      {/* Employee Details Modal */}
-      {showEmployeeModal && (
-        <div className="dialog-overlay active" onClick={() => setShowEmployeeModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>
-              {isAddingEmployee ? 'Add Employee' : t('viewDetails')}
-            </h3>
+
+      {/* Add Employee Full Page */}
+      {showAddEmployeePage && (
+        <div className="page-container">
+          <div className="page-header">
+            <button className="btn-back" onClick={() => setShowAddEmployeePage(false)}>
+              <i className="ti ti-arrow-left"></i>
+            </button>
+            <h2 style={{ fontSize: '18px', margin: 0 }}>Add Employee</h2>
+          </div>
+          <div className="page-content">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
                 <label>{t('employeeName')}</label>
@@ -3920,7 +5293,7 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
               <div className="form-row">
                 <div className="form-group">
                   <label>{t('employeeId')}</label>
-                  <input type="text" value={employeeForm.employeeId} onChange={(e) => setEmployeeForm({...employeeForm, employeeId: e.target.value})} disabled={!isAddingEmployee} />
+                  <input type="text" value={employeeForm.employeeId} onChange={(e) => setEmployeeForm({...employeeForm, employeeId: e.target.value})} disabled />
                 </div>
                 <div className="form-group">
                   <label>Mobile Number</label>
@@ -4052,248 +5425,13 @@ function StockPage({ db, t, lang, setBottomSheet, openStockEdit, totalStockKg, t
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
-              <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeModal(false)}>{t('cancel')}</button>
-                {!isAddingEmployee && (
-                  <button type="button" className="btn btn-danger" onClick={deleteEmployee}>{t('deleteEmployee')}</button>
-                )}
-                <button type="button" className="btn btn-primary" onClick={saveEmployee}>{t('saveEmployee')}</button>
-              </div>
+              <button type="button" className="btn btn-primary mt-8" style={{ width: '100%' }} onClick={saveEmployee}>{t('saveEmployee')}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Inward Edit Modal */}
-      {showInwardModal && (
-        <div className="dialog-overlay active" onClick={() => setShowInwardModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Edit Inward Entry</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group">
-                <label>ID</label>
-                <input type="text" value={inwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
-              </div>
-              <div className="form-group">
-                <label>Date</label>
-                <input type="date" value={inwardForm.date} onChange={(e) => setInwardForm({...inwardForm, date: e.target.value})} />
-              </div>
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label>Supplier</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input 
-                    type="text" 
-                    value={inwardForm.supplier} 
-                    onChange={(e) => setInwardForm({...inwardForm, supplier: e.target.value})} 
-                    style={{ flex: 1 }}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => handleDropdownToggle('supplierName', 'stock')}
-                    style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
-                  >
-                    <i className="ti ti-chevron-down"></i>
-                  </button>
-                </div>
-                {showDropdown === 'supplierName' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 100,
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    marginTop: '4px'
-                  }}>
-                    {dropdownOptions.map((opt, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleDropdownSelect('supplier', opt)}
-                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                      >
-                        {opt}
-                      </div>
-                    ))}
-                    {dropdownOptions.length === 0 && (
-                      <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label>Color</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input 
-                    type="text" 
-                    value={inwardForm.color} 
-                    onChange={(e) => setInwardForm({...inwardForm, color: e.target.value})} 
-                    style={{ flex: 1 }}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => handleDropdownToggle('color', 'stock')}
-                    style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
-                  >
-                    <i className="ti ti-chevron-down"></i>
-                  </button>
-                </div>
-                {showDropdown === 'color' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 100,
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    marginTop: '4px'
-                  }}>
-                    {dropdownOptions.map((opt, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleDropdownSelect('color', opt)}
-                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                      >
-                        {opt}
-                      </div>
-                    ))}
-                    {dropdownOptions.length === 0 && (
-                      <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Bags</label>
-                  <input type="number" value={inwardForm.bags} onChange={(e) => setInwardForm({...inwardForm, bags: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>KG Per Bag</label>
-                  <input type="number" step="0.001" value={inwardForm.kgPerBag} onChange={(e) => setInwardForm({...inwardForm, kgPerBag: e.target.value})} />
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Total KG</label>
-                <input type="number" step="0.001" value={inwardForm.totalKg} onChange={(e) => setInwardForm({...inwardForm, totalKg: e.target.value})} />
-              </div>
-              <div className="form-group">
-                <label>Notes</label>
-                <textarea value={inwardForm.notes} onChange={(e) => setInwardForm({...inwardForm, notes: e.target.value})} rows="3"></textarea>
-              </div>
-              <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowInwardModal(false)}>{t('cancel')}</button>
-                <button type="button" className="btn btn-danger" onClick={deleteInward}>Delete</button>
-                <button type="button" className="btn btn-primary" onClick={saveInward}>Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Outward Edit Modal */}
-      {showOutwardModal && (
-        <div className="dialog-overlay active" onClick={() => setShowOutwardModal(false)}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'left', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '16px' }}>Edit Outward Entry</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group">
-                <label>ID</label>
-                <input type="text" value={outwardForm.id} disabled style={{ backgroundColor: 'var(--bg-cream)' }} />
-              </div>
-              <div className="form-group">
-                <label>Date</label>
-                <input type="date" value={outwardForm.date} onChange={(e) => setOutwardForm({...outwardForm, date: e.target.value})} />
-              </div>
-              <div className="form-group">
-                <label>Party Name</label>
-                <input type="text" value={outwardForm.partyName} onChange={(e) => setOutwardForm({...outwardForm, partyName: e.target.value})} />
-              </div>
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label>Color</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input 
-                    type="text" 
-                    value={outwardForm.color} 
-                    onChange={(e) => setOutwardForm({...outwardForm, color: e.target.value})} 
-                    style={{ flex: 1 }}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => handleDropdownToggle('color', 'stock')}
-                    style={{ padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-cream)', cursor: 'pointer' }}
-                  >
-                    <i className="ti ti-chevron-down"></i>
-                  </button>
-                </div>
-                {showDropdown === 'color' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                    zIndex: 100,
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    marginTop: '4px'
-                  }}>
-                    {dropdownOptions.map((opt, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleDropdownSelect('color', opt)}
-                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-cream)'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                      >
-                        {opt}
-                      </div>
-                    ))}
-                    {dropdownOptions.length === 0 && (
-                      <div style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>No saved values</div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Bags</label>
-                  <input type="number" value={outwardForm.bags} onChange={(e) => setOutwardForm({...outwardForm, bags: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>KG Per Bag</label>
-                  <input type="number" step="0.001" value={outwardForm.kgPerBag} onChange={(e) => setOutwardForm({...outwardForm, kgPerBag: e.target.value})} />
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Total KG</label>
-                <input type="number" step="0.001" value={outwardForm.totalKg} onChange={(e) => setOutwardForm({...outwardForm, totalKg: e.target.value})} />
-              </div>
-              <div className="dialog-buttons">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowOutwardModal(false)}>{t('cancel')}</button>
-                <button type="button" className="btn btn-danger" onClick={deleteOutward}>Delete</button>
-                <button type="button" className="btn btn-primary" onClick={saveOutward}>Save</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
@@ -4504,6 +5642,114 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
 
   const totals = calculateAggregateTotals();
 
+  const generatePayrollHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    
+    let htmlContent = `
+      <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h1 style="margin: 0; color: #1b2b6b;">Payroll Report - Week ${getWeekNumber()}</h1>
+          <p style="margin: 5px 0; color: #666;">Date: ${currentDate}</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
+          <div>
+            <strong>Total Payable:</strong> ₹${totals.netTotal.toFixed(2)}
+          </div>
+          <div>
+            <strong>Total Advances:</strong> ₹${totals.advanceTotal.toFixed(2)}
+          </div>
+          <div>
+            <strong>Gross Total:</strong> ₹${totals.grossTotal.toFixed(2)}
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background: #1b2b6b; color: white;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Employee Name</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Units</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Rate</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Gross Pay</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Advances</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Net Pay</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    db.employees.forEach(emp => {
+      const rate = localPayrollRates[emp.id] || emp.rate;
+      const units = localPayrollProduction[emp.id] || 0;
+      const adv = localPayrollAdvances[emp.id] || 0;
+      const gross = units * rate;
+      const net = Math.max(0, gross - adv);
+      
+      htmlContent += `
+        <tr style="${db.employees.indexOf(emp) % 2 === 0 ? 'background: #f9f9f9;' : ''}">
+          <td style="padding: 10px; border: 1px solid #ddd;">${emp.name}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${units}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">₹${rate}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">₹${gross.toFixed(2)}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">₹${adv.toFixed(2)}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">₹${net.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+    
+    htmlContent += `
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+          <p>Generated by TFO One</p>
+        </div>
+      </div>
+    `;
+    
+    return htmlContent;
+  };
+
+  const downloadPayrollPDF = () => {
+    const element = document.createElement('div');
+    element.innerHTML = generatePayrollHTML();
+    
+    const opt = {
+      margin: 10,
+      filename: `payroll_week_${getWeekNumber()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    
+    html2pdf().set(opt).from(element).save();
+    showToast('PDF downloaded successfully');
+  };
+
+  const printPayrollStatement = () => {
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Payroll Report - Week ${getWeekNumber()}</title>
+        <style>
+          @media print {
+            body { margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        ${generatePayrollHTML()}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = function() {
+      printWindow.print();
+    };
+  };
+
   return (
     <div className="view-panel">
       <div className="text-left">
@@ -4560,10 +5806,10 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
       </div>
 
       <div style={{ display: 'flex', gap: '12px' }} className="mt-16">
-        <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { window.print(); }}>
+        <button className="btn btn-secondary" style={{ flex: 1 }} onClick={printPayrollStatement}>
           <i className="ti ti-printer"></i> Print Statement
         </button>
-        <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { showToast('PDF downloaded'); window.print(); }}>
+        <button className="btn btn-primary" style={{ flex: 1 }} onClick={downloadPayrollPDF}>
           <i className="ti ti-download"></i> {t('downloadPDF')}
         </button>
       </div>
@@ -4575,6 +5821,319 @@ function PayrollPage({ db, t, lang, payrollType, setPayrollType, localPayrollRat
 // COMPONENT: REPORTS GENERATOR SUBPAGE
 // ==========================================
 function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate, setCustomFromDate, customToDate, setCustomToDate, supplierDeliveries, totalStockKg, totalStockBags, weeklyWagesSum, productionTodayKg }) {
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [showReportOptions, setShowReportOptions] = useState(false);
+
+  const handleReportClick = (reportType) => {
+    setSelectedReport(reportType);
+    setShowReportOptions(true);
+  };
+
+  const getReportHTML = (reportType) => {
+    switch(reportType) {
+      case 'stock': return generateStockReportHTML();
+      case 'payroll': return generatePayrollReportHTML();
+      case 'employee': return generateEmployeeReportHTML();
+      case 'production': return generateProductionReportHTML();
+      default: return '';
+    }
+  };
+
+  const getReportFilename = (reportType) => {
+    switch(reportType) {
+      case 'stock': return 'stock_report.pdf';
+      case 'payroll': return 'payroll_report.pdf';
+      case 'employee': return 'employee_report.pdf';
+      case 'production': return 'production_report.pdf';
+      default: return 'report.pdf';
+    }
+  };
+
+  const printReport = () => {
+    const htmlContent = getReportHTML(selectedReport);
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Report</title>
+        <style>
+          @media print {
+            body { margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        ${htmlContent}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = function() {
+      printWindow.print();
+    };
+    setShowReportOptions(false);
+  };
+
+  const downloadReportPDF = () => {
+    const htmlContent = getReportHTML(selectedReport);
+    const filename = getReportFilename(selectedReport);
+    const element = document.createElement('div');
+    element.innerHTML = htmlContent;
+    
+    const opt = {
+      margin: 10,
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    
+    html2pdf().set(opt).from(element).save();
+    setShowReportOptions(false);
+  };
+
+  const generateStockReportHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    
+    let htmlContent = `
+      <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h1 style="margin: 0; color: #1b2b6b;">Stock Report</h1>
+          <p style="margin: 5px 0; color: #666;">Date: ${currentDate}</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
+          <div>
+            <strong>Total Stock:</strong> ${totalStockKg.toFixed(1)} KG
+          </div>
+          <div>
+            <strong>Total Bags:</strong> ${totalStockBags}
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background: #1b2b6b; color: white;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Color</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Bags</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">KG</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    db.stock.forEach(item => {
+      htmlContent += `
+        <tr style="${db.stock.indexOf(item) % 2 === 0 ? 'background: #f9f9f9;' : ''}">
+          <td style="padding: 10px; border: 1px solid #ddd;">${item.color}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.bags}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.kg.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+    
+    htmlContent += `
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+          <p>Generated by TFO One</p>
+        </div>
+      </div>
+    `;
+    
+    return htmlContent;
+  };
+
+  const generatePayrollReportHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    
+    let htmlContent = `
+      <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h1 style="margin: 0; color: #1b2b6b;">Payroll Report</h1>
+          <p style="margin: 5px 0; color: #666;">Date: ${currentDate}</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
+          <div>
+            <strong>Weekly Total:</strong> ₹${weeklyWagesSum}
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background: #1b2b6b; color: white;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Employee Name</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">ID</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Rate</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    db.employees.forEach(emp => {
+      htmlContent += `
+        <tr style="${db.employees.indexOf(emp) % 2 === 0 ? 'background: #f9f9f9;' : ''}">
+          <td style="padding: 10px; border: 1px solid #ddd;">${emp.name}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${emp.id}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">₹${emp.rate}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${emp.status || 'Active'}</td>
+        </tr>
+      `;
+    });
+    
+    htmlContent += `
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+          <p>Generated by TFO One</p>
+        </div>
+      </div>
+    `;
+    
+    return htmlContent;
+  };
+
+  const generateEmployeeReportHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    
+    let htmlContent = `
+      <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h1 style="margin: 0; color: #1b2b6b;">Employee Report</h1>
+          <p style="margin: 5px 0; color: #666;">Date: ${currentDate}</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
+          <div>
+            <strong>Total Employees:</strong> ${db.employees.length}
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background: #1b2b6b; color: white;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Name</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">ID</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Designation</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Mobile</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    db.employees.forEach(emp => {
+      htmlContent += `
+        <tr style="${db.employees.indexOf(emp) % 2 === 0 ? 'background: #f9f9f9;' : ''}">
+          <td style="padding: 10px; border: 1px solid #ddd;">${emp.name}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${emp.id}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${emp.designation || 'N/A'}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${emp.mobile || 'N/A'}</td>
+        </tr>
+      `;
+    });
+    
+    htmlContent += `
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+          <p>Generated by TFO One</p>
+        </div>
+      </div>
+    `;
+    
+    return htmlContent;
+  };
+
+  const generateProductionReportHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    
+    let htmlContent = `
+      <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h1 style="margin: 0; color: #1b2b6b;">Production Summary Report</h1>
+          <p style="margin: 5px 0; color: #666;">Date: ${currentDate}</p>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
+          <div>
+            <strong>Today's Production:</strong> ${productionTodayKg} KG
+          </div>
+        </div>
+        
+        <h3 style="color: #1b2b6b; margin-top: 20px;">Inward Entries</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+            <tr style="background: #1b2b6b; color: white;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Date</th>
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Supplier</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Color</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Bags</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">KG</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    db.inward.forEach(item => {
+      htmlContent += `
+        <tr style="${db.inward.indexOf(item) % 2 === 0 ? 'background: #f9f9f9;' : ''}">
+          <td style="padding: 10px; border: 1px solid #ddd;">${item.date}</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${item.supplier}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.color}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.bags}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.totalKg.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+    
+    htmlContent += `
+          </tbody>
+        </table>
+        
+        <h3 style="color: #1b2b6b; margin-top: 20px;">Outward Entries</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+          <thead>
+            <tr style="background: #1b2b6b; color: white;">
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Date</th>
+              <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Party</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Color</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">Bags</th>
+              <th style="padding: 12px; text-align: center; border: 1px solid #ddd;">KG</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    db.outward.forEach(item => {
+      htmlContent += `
+        <tr style="${db.outward.indexOf(item) % 2 === 0 ? 'background: #f9f9f9;' : ''}">
+          <td style="padding: 10px; border: 1px solid #ddd;">${item.date}</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">${item.partyName}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.color}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.bags}</td>
+          <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">${item.totalKg.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+    
+    htmlContent += `
+          </tbody>
+        </table>
+        
+        <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+          <p>Generated by TFO One</p>
+        </div>
+      </div>
+    `;
+    
+    return htmlContent;
+  };
 
   return (
     <div className="view-panel">
@@ -4583,9 +6142,6 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <h1 style={{ fontSize: '24px', margin: '0' }}>{t('reports')}</h1>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>Download statistics ledger statements</p>
         </div>
-        <button className="btn btn-primary" style={{ width: 'auto', minHeight: '36px', padding: '6px 12px' }} onClick={() => window.print()}>
-          <i className="ti ti-printer"></i> PDF
-        </button>
       </div>
 
       {/* Date Range selectors */}
@@ -4614,7 +6170,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
 
       {/* Main reports categories */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} className="mt-8">
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handleReportClick('stock')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-package"></i></div>
             <div className="report-details">
@@ -4625,7 +6181,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handleReportClick('payroll')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-cash"></i></div>
             <div className="report-details">
@@ -4636,7 +6192,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handleReportClick('employee')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-users"></i></div>
             <div className="report-details">
@@ -4647,7 +6203,7 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
 
-        <div className="report-card text-left" onClick={() => window.print()}>
+        <div className="report-card text-left" onClick={() => handleReportClick('production')}>
           <div className="report-left">
             <div className="report-icon"><i className="ti ti-chart-arrows"></i></div>
             <div className="report-details">
@@ -4658,6 +6214,27 @@ function ReportsPage({ db, t, lang, reportRange, setReportRange, customFromDate,
           <span className="badge-sync online">PDF</span>
         </div>
       </div>
+
+      {/* Report Options Modal */}
+      {showReportOptions && (
+        <div className="bottom-sheet-overlay active" onClick={() => setShowReportOptions(false)}>
+          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="bottom-sheet-drag-handle"></div>
+            <div className="bottom-sheet-header">
+              <span className="bottom-sheet-title">Report Options</span>
+              <button className="btn-back" style={{ transform: 'rotate(45deg)' }} onClick={() => setShowReportOptions(false)}><i className="ti ti-plus"></i></button>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', padding: '16px' }}>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={printReport}>
+                <i className="ti ti-printer"></i> Print Statement
+              </button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={downloadReportPDF}>
+                <i className="ti ti-download"></i> Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Supplier Section summary */}
       <div className="card text-left mt-8">
