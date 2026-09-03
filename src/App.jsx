@@ -906,18 +906,27 @@ export default function App() {
   // Handle Supabase Auth States
   useEffect(() => {
     if (!isSupabaseConfigured()) {
+      console.log('Supabase not configured, using local mode');
       setCloudStatus('local');
       // No Supabase — stay on auth screen (already set as initial state)
       return;
     }
 
+    console.log('Supabase configured, checking for session...');
+
     // Get initial session - Supabase persists session in localStorage automatically
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session ? 'Found session' : 'No session');
+      if (session) {
+        console.log('Session user ID:', session.user.id);
+        console.log('Session user email:', session.user.email);
+      }
       setSession(session);
       if (session) {
         setCloudStatus('syncing');
         loadDataFromCloud(session.user.id, session.user.email);
       } else {
+        console.log('No session found, showing auth screen');
         setCloudStatus('offline');
         setScreen('auth');
       }
@@ -930,6 +939,10 @@ export default function App() {
     // Listen to auth state changes (OAuth redirect, sign-out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('Auth state changed:', _event);
+      console.log('Session after change:', session ? 'Active' : 'None');
+      if (session) {
+        console.log('Session user ID:', session.user.id);
+      }
       setSession(session);
       if (session) {
         setCloudStatus('syncing');
@@ -940,9 +953,7 @@ export default function App() {
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const loadDataFromCloud = async (userId, userEmail) => {
@@ -1210,15 +1221,25 @@ export default function App() {
   // Automatic Cloud Sync (Debounced)
   useEffect(() => {
     if (!isInitialLoadComplete || !session || !isSupabaseConfigured()) {
+      console.log('Auto-sync skipped:', {
+        isInitialLoadComplete,
+        hasSession: !!session,
+        isSupabaseConfigured: isSupabaseConfigured()
+      });
       return;
     }
 
     const delayDebounceFn = setTimeout(async () => {
       setCloudStatus('syncing');
       console.log('Attempting to sync data to cloud for user:', session.user.id);
+      console.log('Syncing factory settings:', !!db.settings.ownerName || !!db.settings.factoryName);
+      console.log('Syncing stock:', db.stock?.length || 0, 'items');
+      console.log('Syncing employees:', db.employees?.length || 0, 'items');
+      
       try {
         // Sync factory settings
         if (db.settings.ownerName || db.settings.factoryName) {
+          console.log('Upserting factory settings...');
           await upsertFactorySettings(session.user.id, {
             owner_name: db.settings.ownerName,
             factory_name: db.settings.factoryName,
@@ -1228,10 +1249,12 @@ export default function App() {
             pincode: db.settings.pincode,
             logo: db.settings.logo
           });
+          console.log('Factory settings synced');
         }
 
         // Sync stock
         if (db.stock && db.stock.length > 0) {
+          console.log('Syncing stock items...');
           for (const stockItem of db.stock) {
             if (stockItem.id) {
               await updateStock(stockItem.id, stockItem);
@@ -1239,10 +1262,12 @@ export default function App() {
               await createStock(session.user.id, stockItem);
             }
           }
+          console.log('Stock synced');
         }
 
         // Sync employees
         if (db.employees && db.employees.length > 0) {
+          console.log('Syncing employees...');
           for (const employee of db.employees) {
             if (employee.id) {
               await updateEmployee(employee.id, employee);
@@ -1250,12 +1275,14 @@ export default function App() {
               await createEmployee(session.user.id, employee);
             }
           }
+          console.log('Employees synced');
         }
 
         setCloudStatus('synced');
         console.log("Data synced to cloud successfully");
       } catch (err) {
         console.error("Auto sync error:", err);
+        console.error("Error details:", err.message);
         setCloudStatus('offline');
       }
     }, 1000); // Debounce sync by 1 second
