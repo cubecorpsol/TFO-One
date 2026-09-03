@@ -39,7 +39,7 @@ export const signInWithGoogle = async () => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      redirectTo: 'https://cubecorpsol.github.io/TFO-One/',
       queryParams: {
         prompt: 'select_account',
         access_type: 'offline'
