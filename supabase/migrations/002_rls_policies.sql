@@ -17,6 +17,11 @@ ALTER TABLE public.activity_log ENABLE ROW LEVEL SECURITY;
 -- ============================================
 -- PROFILES RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+
 -- Users can view their own profile
 CREATE POLICY "Users can view own profile"
   ON public.profiles FOR SELECT
@@ -35,6 +40,12 @@ CREATE POLICY "Users can update own profile"
 -- ============================================
 -- FACTORY SETTINGS RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own factory settings" ON public.factory_settings;
+DROP POLICY IF EXISTS "Users can insert own factory settings" ON public.factory_settings;
+DROP POLICY IF EXISTS "Users can update own factory settings" ON public.factory_settings;
+DROP POLICY IF EXISTS "Users can delete own factory settings" ON public.factory_settings;
+
 -- Users can view their own factory settings
 CREATE POLICY "Users can view own factory settings"
   ON public.factory_settings FOR SELECT
@@ -58,6 +69,12 @@ CREATE POLICY "Users can delete own factory settings"
 -- ============================================
 -- EMPLOYEES RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own employees" ON public.employees;
+DROP POLICY IF EXISTS "Users can insert own employees" ON public.employees;
+DROP POLICY IF EXISTS "Users can update own employees" ON public.employees;
+DROP POLICY IF EXISTS "Users can delete own employees" ON public.employees;
+
 -- Users can view their own employees
 CREATE POLICY "Users can view own employees"
   ON public.employees FOR SELECT
@@ -81,6 +98,12 @@ CREATE POLICY "Users can delete own employees"
 -- ============================================
 -- YARN TYPES RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own yarn types" ON public.yarn_types;
+DROP POLICY IF EXISTS "Users can insert own yarn types" ON public.yarn_types;
+DROP POLICY IF EXISTS "Users can update own yarn types" ON public.yarn_types;
+DROP POLICY IF EXISTS "Users can delete own yarn types" ON public.yarn_types;
+
 -- Users can view their own yarn types
 CREATE POLICY "Users can view own yarn types"
   ON public.yarn_types FOR SELECT
@@ -104,6 +127,12 @@ CREATE POLICY "Users can delete own yarn types"
 -- ============================================
 -- STOCK RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own stock" ON public.stock;
+DROP POLICY IF EXISTS "Users can insert own stock" ON public.stock;
+DROP POLICY IF EXISTS "Users can update own stock" ON public.stock;
+DROP POLICY IF EXISTS "Users can delete own stock" ON public.stock;
+
 -- Users can view their own stock
 CREATE POLICY "Users can view own stock"
   ON public.stock FOR SELECT
@@ -127,6 +156,12 @@ CREATE POLICY "Users can delete own stock"
 -- ============================================
 -- SUPPLIERS RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own suppliers" ON public.suppliers;
+DROP POLICY IF EXISTS "Users can insert own suppliers" ON public.suppliers;
+DROP POLICY IF EXISTS "Users can update own suppliers" ON public.suppliers;
+DROP POLICY IF EXISTS "Users can delete own suppliers" ON public.suppliers;
+
 -- Users can view their own suppliers
 CREATE POLICY "Users can view own suppliers"
   ON public.suppliers FOR SELECT
@@ -150,6 +185,12 @@ CREATE POLICY "Users can delete own suppliers"
 -- ============================================
 -- PARTIES RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own parties" ON public.parties;
+DROP POLICY IF EXISTS "Users can insert own parties" ON public.parties;
+DROP POLICY IF EXISTS "Users can update own parties" ON public.parties;
+DROP POLICY IF EXISTS "Users can delete own parties" ON public.parties;
+
 -- Users can view their own parties
 CREATE POLICY "Users can view own parties"
   ON public.parties FOR SELECT
@@ -173,6 +214,12 @@ CREATE POLICY "Users can delete own parties"
 -- ============================================
 -- INWARD TRANSACTIONS RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own inward transactions" ON public.inward_transactions;
+DROP POLICY IF EXISTS "Users can insert own inward transactions" ON public.inward_transactions;
+DROP POLICY IF EXISTS "Users can update own inward transactions" ON public.inward_transactions;
+DROP POLICY IF EXISTS "Users can delete own inward transactions" ON public.inward_transactions;
+
 -- Users can view their own inward transactions
 CREATE POLICY "Users can view own inward transactions"
   ON public.inward_transactions FOR SELECT
@@ -196,6 +243,12 @@ CREATE POLICY "Users can delete own inward transactions"
 -- ============================================
 -- OUTWARD TRANSACTIONS RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own outward transactions" ON public.outward_transactions;
+DROP POLICY IF EXISTS "Users can insert own outward transactions" ON public.outward_transactions;
+DROP POLICY IF EXISTS "Users can update own outward transactions" ON public.outward_transactions;
+DROP POLICY IF EXISTS "Users can delete own outward transactions" ON public.outward_transactions;
+
 -- Users can view their own outward transactions
 CREATE POLICY "Users can view own outward transactions"
   ON public.outward_transactions FOR SELECT
@@ -219,6 +272,12 @@ CREATE POLICY "Users can delete own outward transactions"
 -- ============================================
 -- ATTENDANCE RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own attendance" ON public.attendance;
+DROP POLICY IF EXISTS "Users can insert own attendance" ON public.attendance;
+DROP POLICY IF EXISTS "Users can update own attendance" ON public.attendance;
+DROP POLICY IF EXISTS "Users can delete own attendance" ON public.attendance;
+
 -- Users can view their own attendance
 CREATE POLICY "Users can view own attendance"
   ON public.attendance FOR SELECT
@@ -242,6 +301,12 @@ CREATE POLICY "Users can delete own attendance"
 -- ============================================
 -- PAYROLL RUNS RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own payroll runs" ON public.payroll_runs;
+DROP POLICY IF EXISTS "Users can insert own payroll runs" ON public.payroll_runs;
+DROP POLICY IF EXISTS "Users can update own payroll runs" ON public.payroll_runs;
+DROP POLICY IF EXISTS "Users can delete own payroll runs" ON public.payroll_runs;
+
 -- Users can view their own payroll runs
 CREATE POLICY "Users can view own payroll runs"
   ON public.payroll_runs FOR SELECT
@@ -265,6 +330,11 @@ CREATE POLICY "Users can delete own payroll runs"
 -- ============================================
 -- ACTIVITY LOG RLS POLICIES
 -- ============================================
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own activity log" ON public.activity_log;
+DROP POLICY IF EXISTS "Users can insert own activity log" ON public.activity_log;
+DROP POLICY IF EXISTS "Users can delete own activity log" ON public.activity_log;
+
 -- Users can view their own activity log
 CREATE POLICY "Users can view own activity log"
   ON public.activity_log FOR SELECT
@@ -292,6 +362,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop trigger if it exists, then create it
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 -- Trigger to call function on signup
 CREATE TRIGGER on_auth_user_created
