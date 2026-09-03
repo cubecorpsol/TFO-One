@@ -6,8 +6,20 @@ import {
   signInUser,
   signUpUser,
   signOutUser,
-  fetchFactoryData,
-  upsertFactoryData,
+  getProfile,
+  updateProfile,
+  getFactorySettings,
+  upsertFactorySettings,
+  getEmployees,
+  getYarnTypes,
+  getStock,
+  getSuppliers,
+  getParties,
+  getInwardTransactions,
+  getOutwardTransactions,
+  getPayrollRuns,
+  getActivityLog,
+  loadAllUserData,
   signInWithGoogle,
   signInWithGoogleNative
 } from './supabase';
@@ -934,57 +946,55 @@ export default function App() {
     setCloudStatus('syncing');
     
     try {
-      const data = await fetchFactoryData(userId);
+      const data = await loadAllUserData(userId);
       console.log('Cloud data received:', data);
-      if (data) {
-        // Merge cloud data with state
-        const mergedDb = {
-          settings: {
-            ...(data.settings || DEFAULT_FACTORY_SETTINGS),
-            email: userEmail || data.email || data.settings?.email || ''
-          },
-          employees: data.employees || [],
-          stock: data.stock || [],
-          yarn: data.yarn || [],
-          inward: data.inward || [],
-          outward: data.outward || [],
-          activity: data.activity || [],
-          attendance: data.attendance || {},
-          payrollRuns: data.payroll_runs || []
-        };
-        setDb(mergedDb);
-        setCloudStatus('synced');
-        setIsInitialLoadComplete(true);
-        // If the user completed onboarding before → home; else → onboarding
-        if (data.settings?.onboardingComplete) {
-          navigateTo('home');
-        } else {
-          console.log('Cloud user has not completed onboarding, going to onboarding');
-          navigateTo('onboarding');
-          setOnboardingStep(1);
-        }
+      
+      // Check if user has completed onboarding via profile
+      const profile = await getProfile(userId);
+      const onboardingComplete = profile?.onboarding_complete || false;
+      
+      // Convert normalized data to app's db structure
+      const mergedDb = {
+        settings: {
+          ownerName: data.factorySettings?.owner_name || '',
+          factoryName: data.factorySettings?.factory_name || '',
+          phone: data.factorySettings?.phone || '',
+          whatsapp: data.factorySettings?.whatsapp || '',
+          address: data.factorySettings?.address || '',
+          pincode: data.factorySettings?.pincode || '',
+          logo: data.factorySettings?.logo || '',
+          email: userEmail || profile?.email || '',
+          onboardingComplete: onboardingComplete
+        },
+        employees: data.employees || [],
+        stock: data.stock || [],
+        yarn: data.yarnTypes || [],
+        inward: data.inward || [],
+        outward: data.outward || [],
+        activity: data.activity || [],
+        attendance: {},
+        payrollRuns: data.payrollRuns || []
+      };
+      
+      setDb(mergedDb);
+      setCloudStatus('synced');
+      setIsInitialLoadComplete(true);
+      
+      // If the user completed onboarding before → home; else → onboarding
+      if (onboardingComplete) {
+        navigateTo('home');
       } else {
-        // No cloud record at all — this is a brand-new user.
-        // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
-        let completedLocally = false;
-        try {
-          const localData = localStorage.getItem('tfo_db');
-          if (localData) {
-            const parsed = JSON.parse(localData);
-            completedLocally = !!parsed?.settings?.onboardingComplete;
-          }
-        } catch (e) {
-          console.error('Error parsing localStorage:', e);
-        }
-
-        setCloudStatus('synced');
-        setIsInitialLoadComplete(true);
-        if (completedLocally) {
-          console.log('Onboarding completed locally, going to home');
-          navigateTo('home');
-        } else {
-          // Brand-new user — wipe default mock data and start completely fresh
-          console.log('New user — clearing mock data and going to onboarding');
+        console.log('Cloud user has not completed onboarding, going to onboarding');
+        navigateTo('onboarding');
+        setOnboardingStep(1);
+      }
+    } catch (err) {
+      console.error('Error loading data from cloud:', err);
+      // Fallback to checking if user exists at all
+      try {
+        const profile = await getProfile(userId);
+        if (profile) {
+          // User exists but no data yet
           const freshDb = {
             settings: {
               ownerName: '',
@@ -993,8 +1003,8 @@ export default function App() {
               whatsapp: '',
               address: '',
               logo: '',
-              email: userEmail || '',
-              onboardingComplete: false
+              email: userEmail || profile.email || '',
+              onboardingComplete: profile.onboarding_complete || false
             },
             employees: [],
             stock: [],
@@ -1006,20 +1016,94 @@ export default function App() {
             payrollRuns: []
           };
           setDb(freshDb);
-          // Clear localStorage so stale default data doesn't survive a page refresh
-          localStorage.removeItem('tfo_db');
-          sessionStorage.removeItem('tfo_db');
-          navigateTo('onboarding');
-          setOnboardingStep(1);
+          setCloudStatus('synced');
+          setIsInitialLoadComplete(true);
+          
+          if (profile.onboarding_complete) {
+            navigateTo('home');
+          } else {
+            navigateTo('onboarding');
+            setOnboardingStep(1);
+          }
+        } else {
+          // No profile at all — brand new user
+          // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
+          let completedLocally = false;
+          try {
+            const localData = localStorage.getItem('tfo_db');
+            if (localData) {
+              const parsed = JSON.parse(localData);
+              completedLocally = !!parsed?.settings?.onboardingComplete;
+            }
+          } catch (e) {
+            console.error('Error parsing localStorage:', e);
+          }
+
+          setCloudStatus('synced');
+          setIsInitialLoadComplete(true);
+          if (completedLocally) {
+            console.log('Onboarding completed locally, going to home');
+            navigateTo('home');
+          } else {
+            // Brand-new user — wipe default mock data and start completely fresh
+            console.log('New user — clearing mock data and going to onboarding');
+            const freshDb = {
+              settings: {
+                ownerName: '',
+                factoryName: '',
+                phone: '',
+                whatsapp: '',
+                address: '',
+                logo: '',
+                email: userEmail || '',
+                onboardingComplete: false
+              },
+              employees: [],
+              stock: [],
+              yarn: [],
+              inward: [],
+              outward: [],
+              activity: [],
+              attendance: {},
+              payrollRuns: []
+            };
+            setDb(freshDb);
+            // Clear localStorage so stale default data doesn't survive a page refresh
+            localStorage.removeItem('tfo_db');
+            sessionStorage.removeItem('tfo_db');
+            navigateTo('onboarding');
+            setOnboardingStep(1);
+          }
         }
+      } catch (profileErr) {
+        console.error('Error checking profile:', profileErr);
+        // Treat as new user
+        const freshDb = {
+          settings: {
+            ownerName: '',
+            factoryName: '',
+            phone: '',
+            whatsapp: '',
+            address: '',
+            logo: '',
+            email: userEmail || '',
+            onboardingComplete: false
+          },
+          employees: [],
+          stock: [],
+          yarn: [],
+          inward: [],
+          outward: [],
+          activity: [],
+          attendance: {},
+          payrollRuns: []
+        };
+        setDb(freshDb);
+        setCloudStatus('synced');
+        setIsInitialLoadComplete(true);
+        navigateTo('onboarding');
+        setOnboardingStep(1);
       }
-    } catch (err) {
-      console.error("Cloud fetch error:", err);
-      setCloudStatus('offline');
-      setDbError('fetch_failed');
-      showToast('Could not reach cloud. Please check your connection.', 'error');
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -1318,11 +1402,25 @@ export default function App() {
 
       setDb(updatedDb);
 
-      // Save to Supabase
+      // Save to Supabase using new normalized schema
       if (isSupabaseConfigured() && session) {
         setCloudStatus('syncing');
         try {
-          await upsertFactoryData(session.user.id, updatedDb, session.user.email);
+          // Update profile with onboarding completion
+          await updateProfile(session.user.id, { 
+            onboarding_complete: true,
+            email: session.user.email 
+          });
+          
+          // Save factory settings
+          await upsertFactorySettings(session.user.id, {
+            owner_name: obName,
+            factory_name: obFactory,
+            phone: obMobile,
+            whatsapp: obMobile,
+            address: obAddress
+          });
+          
           setCloudStatus('synced');
         } catch (e) {
           console.error("Onboarding sync error:", e);
