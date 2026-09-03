@@ -71,6 +71,118 @@ export const signOutUser = async () => {
 };
 
 // ============================================
+// MIGRATION HELPER (migrate from old factory_data to new schema)
+// ============================================
+export const migrateFromLegacySchema = async (userId) => {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  
+  console.log('Migrating data from legacy factory_data table for user:', userId);
+  
+  try {
+    // Fetch data from old factory_data table
+    const { data: legacyData, error: fetchError } = await supabase
+      .from('factory_data')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (fetchError) {
+      console.log('No legacy data found or error fetching:', fetchError.message);
+      return { success: false, message: 'No legacy data to migrate' };
+    }
+    
+    if (!legacyData) {
+      return { success: false, message: 'No legacy data found' };
+    }
+    
+    console.log('Legacy data found, migrating to new schema...');
+    
+    // Parse settings if they're a string
+    let settings = legacyData.settings;
+    if (typeof settings === 'string') {
+      try {
+        settings = JSON.parse(settings);
+      } catch (e) {
+        console.error('Error parsing settings:', e);
+        settings = {};
+      }
+    }
+    
+    // Migrate factory settings
+    if (settings.ownerName || settings.factoryName) {
+      await upsertFactorySettings(userId, {
+        owner_name: settings.ownerName || '',
+        factory_name: settings.factoryName || '',
+        phone: settings.phone || '',
+        whatsapp: settings.whatsapp || '',
+        address: settings.address || '',
+        pincode: settings.pincode || '',
+        logo: settings.logo || ''
+      });
+    }
+    
+    // Update profile with onboarding status
+    if (settings.onboardingComplete) {
+      await updateProfile(userId, { 
+        onboarding_complete: true,
+        email: legacyData.email || settings.email 
+      });
+    }
+    
+    // Migrate stock
+    if (legacyData.stock && Array.isArray(legacyData.stock)) {
+      for (const stockItem of legacyData.stock) {
+        try {
+          await createStock(userId, {
+            stock_name: stockItem.color || 'Unknown',
+            color: stockItem.color || '',
+            kg: parseFloat(stockItem.kg) || 0,
+            bags: parseInt(stockItem.bags) || 0,
+            weight_per_bag: stockItem.kgPerBag ? parseFloat(stockItem.kgPerBag) : null,
+            notes: ''
+          });
+        } catch (e) {
+          console.error('Error migrating stock item:', e);
+        }
+      }
+    }
+    
+    // Migrate employees
+    if (legacyData.employees && Array.isArray(legacyData.employees)) {
+      for (const employee of legacyData.employees) {
+        try {
+          await createEmployee(userId, {
+            name: employee.name || '',
+            father_name: employee.fatherName || '',
+            mother_name: employee.motherName || '',
+            phone: employee.phone || '',
+            blood_group: employee.bloodGroup || '',
+            dob: employee.dob || null,
+            aadhaar: employee.aadhaar || '',
+            pay_type: employee.payType || 'production',
+            shift: employee.shift || 'Morning',
+            rate: employee.rate ? parseFloat(employee.rate) : null,
+            joining_date: employee.joiningDate || null,
+            address: employee.address || '',
+            status: employee.status || 'present',
+            photo_url: employee.photoUrl || ''
+          });
+        } catch (e) {
+          console.error('Error migrating employee:', e);
+        }
+      }
+    }
+    
+    console.log('Migration completed successfully');
+    return { success: true, message: 'Migration completed' };
+    
+  } catch (error) {
+    console.error('Migration error:', error);
+    return { success: false, message: error.message };
+  }
+};
+
+// ============================================
 // LEGACY SINGLE TABLE HELPERS (for factory_data table)
 // ============================================
 export const fetchFactoryData = async (userId) => {

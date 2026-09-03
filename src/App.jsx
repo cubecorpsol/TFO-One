@@ -11,8 +11,12 @@ import {
   getFactorySettings,
   upsertFactorySettings,
   getEmployees,
+  createEmployee,
+  updateEmployee,
   getYarnTypes,
   getStock,
+  createStock,
+  updateStock,
   getSuppliers,
   getParties,
   getInwardTransactions,
@@ -20,6 +24,7 @@ import {
   getPayrollRuns,
   getActivityLog,
   loadAllUserData,
+  migrateFromLegacySchema,
   signInWithGoogle,
   signInWithGoogleNative
 } from './supabase';
@@ -990,63 +995,117 @@ export default function App() {
       }
     } catch (err) {
       console.error('Error loading data from cloud:', err);
-      // Fallback to checking if user exists at all
+      // Try to migrate from legacy schema
+      console.log('Attempting to migrate from legacy schema...');
       try {
-        const profile = await getProfile(userId);
-        if (profile) {
-          // User exists but no data yet
-          const freshDb = {
+        const migrationResult = await migrateFromLegacySchema(userId);
+        console.log('Migration result:', migrationResult);
+        
+        if (migrationResult.success) {
+          // Reload data after migration
+          const data = await loadAllUserData(userId);
+          const profile = await getProfile(userId);
+          const onboardingComplete = profile?.onboarding_complete || false;
+          
+          const mergedDb = {
             settings: {
-              ownerName: '',
-              factoryName: '',
-              phone: '',
-              whatsapp: '',
-              address: '',
-              logo: '',
-              email: userEmail || profile.email || '',
-              onboardingComplete: profile.onboarding_complete || false
+              ownerName: data.factorySettings?.owner_name || '',
+              factoryName: data.factorySettings?.factory_name || '',
+              phone: data.factorySettings?.phone || '',
+              whatsapp: data.factorySettings?.whatsapp || '',
+              address: data.factorySettings?.address || '',
+              pincode: data.factorySettings?.pincode || '',
+              logo: data.factorySettings?.logo || '',
+              email: userEmail || profile?.email || '',
+              onboardingComplete: onboardingComplete
             },
-            employees: [],
-            stock: [],
-            yarn: [],
-            inward: [],
-            outward: [],
-            activity: [],
+            employees: data.employees || [],
+            stock: data.stock || [],
+            yarn: data.yarnTypes || [],
+            inward: data.inward || [],
+            outward: data.outward || [],
+            activity: data.activity || [],
             attendance: {},
-            payrollRuns: []
+            payrollRuns: data.payrollRuns || []
           };
-          setDb(freshDb);
+          
+          setDb(mergedDb);
           setCloudStatus('synced');
           setIsInitialLoadComplete(true);
           
-          if (profile.onboarding_complete) {
+          if (onboardingComplete) {
             navigateTo('home');
           } else {
             navigateTo('onboarding');
             setOnboardingStep(1);
           }
         } else {
-          // No profile at all — brand new user
-          // Check localStorage for onboardingComplete flag ONLY (ignore default mock data)
-          let completedLocally = false;
+          // Fallback to checking if user exists at all
           try {
-            const localData = localStorage.getItem('tfo_db');
-            if (localData) {
-              const parsed = JSON.parse(localData);
-              completedLocally = !!parsed?.settings?.onboardingComplete;
+            const profile = await getProfile(userId);
+            if (profile) {
+              // User exists but no data yet
+              const freshDb = {
+                settings: {
+                  ownerName: '',
+                  factoryName: '',
+                  phone: '',
+                  whatsapp: '',
+                  address: '',
+                  logo: '',
+                  email: userEmail || profile.email || '',
+                  onboardingComplete: profile.onboarding_complete || false
+                },
+                employees: [],
+                stock: [],
+                yarn: [],
+                inward: [],
+                outward: [],
+                activity: [],
+                attendance: {},
+                payrollRuns: []
+              };
+              setDb(freshDb);
+              setCloudStatus('synced');
+              setIsInitialLoadComplete(true);
+              
+              if (profile.onboarding_complete) {
+                navigateTo('home');
+              } else {
+                navigateTo('onboarding');
+                setOnboardingStep(1);
+              }
+            } else {
+              // No profile at all — brand new user
+              const freshDb = {
+                settings: {
+                  ownerName: '',
+                  factoryName: '',
+                  phone: '',
+                  whatsapp: '',
+                  address: '',
+                  logo: '',
+                  email: userEmail || '',
+                  onboardingComplete: false
+                },
+                employees: [],
+                stock: [],
+                yarn: [],
+                inward: [],
+                outward: [],
+                activity: [],
+                attendance: {},
+                payrollRuns: []
+              };
+              setDb(freshDb);
+              setCloudStatus('synced');
+              setIsInitialLoadComplete(true);
+              navigateTo('onboarding');
+              setOnboardingStep(1);
             }
-          } catch (e) {
-            console.error('Error parsing localStorage:', e);
-          }
-
-          setCloudStatus('synced');
-          setIsInitialLoadComplete(true);
-          if (completedLocally) {
-            console.log('Onboarding completed locally, going to home');
-            navigateTo('home');
-          } else {
-            // Brand-new user — wipe default mock data and start completely fresh
-            console.log('New user — clearing mock data and going to onboarding');
+          } catch (profileErr) {
+            console.error('Error checking profile:', profileErr);
+            // Treat as new user
             const freshDb = {
               settings: {
                 ownerName: '',
@@ -1068,16 +1127,15 @@ export default function App() {
               payrollRuns: []
             };
             setDb(freshDb);
-            // Clear localStorage so stale default data doesn't survive a page refresh
-            localStorage.removeItem('tfo_db');
-            sessionStorage.removeItem('tfo_db');
+            setCloudStatus('synced');
+            setIsInitialLoadComplete(true);
             navigateTo('onboarding');
             setOnboardingStep(1);
           }
         }
-      } catch (profileErr) {
-        console.error('Error checking profile:', profileErr);
-        // Treat as new user
+      } catch (migrationErr) {
+        console.error('Migration error:', migrationErr);
+        // Final fallback - treat as new user
         const freshDb = {
           settings: {
             ownerName: '',
@@ -1159,7 +1217,41 @@ export default function App() {
       setCloudStatus('syncing');
       console.log('Attempting to sync data to cloud for user:', session.user.id);
       try {
-        await upsertFactoryData(session.user.id, db, session.user.email);
+        // Sync factory settings
+        if (db.settings.ownerName || db.settings.factoryName) {
+          await upsertFactorySettings(session.user.id, {
+            owner_name: db.settings.ownerName,
+            factory_name: db.settings.factoryName,
+            phone: db.settings.phone,
+            whatsapp: db.settings.whatsapp,
+            address: db.settings.address,
+            pincode: db.settings.pincode,
+            logo: db.settings.logo
+          });
+        }
+
+        // Sync stock
+        if (db.stock && db.stock.length > 0) {
+          for (const stockItem of db.stock) {
+            if (stockItem.id) {
+              await updateStock(stockItem.id, stockItem);
+            } else {
+              await createStock(session.user.id, stockItem);
+            }
+          }
+        }
+
+        // Sync employees
+        if (db.employees && db.employees.length > 0) {
+          for (const employee of db.employees) {
+            if (employee.id) {
+              await updateEmployee(employee.id, employee);
+            } else {
+              await createEmployee(session.user.id, employee);
+            }
+          }
+        }
+
         setCloudStatus('synced');
         console.log("Data synced to cloud successfully");
       } catch (err) {
