@@ -296,7 +296,10 @@ export const upsertFactorySettings = async (userId, settings) => {
   if (!supabase) throw new Error("Supabase is not configured.");
   const { data, error } = await supabase
     .from('factory_settings')
-    .upsert({ user_id: userId, ...settings })
+    .upsert({ user_id: userId, ...settings }, { 
+      onConflict: 'user_id',
+      ignoreDuplicates: false 
+    })
     .select()
     .maybeSingle();
   if (error) throw error;
