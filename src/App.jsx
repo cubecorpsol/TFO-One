@@ -1639,7 +1639,7 @@ export default function App() {
   const [inwardNotes, setInwardNotes] = useState('');
   const [showNewSupplierInput, setShowNewSupplierInput] = useState(false);
 
-  const saveInwardEntry = (e) => {
+  const saveInwardEntry = async (e) => {
     e.preventDefault();
     console.log('saveInwardEntry called');
     const finalSupplier = showNewSupplierInput ? inwardNewSupplier : inwardSupplier;
@@ -1685,6 +1685,45 @@ export default function App() {
       stock: updatedStock
     }));
 
+    // Save to Supabase
+    if (isSupabaseConfigured() && session) {
+      try {
+        // Create supplier if new
+        if (showNewSupplierInput) {
+          await createSupplier(session.user.id, { name: finalSupplier });
+        }
+        
+        // Create inward transaction
+        await createInwardTransaction(session.user.id, {
+          date: inwardDate,
+          supplier_name: finalSupplier,
+          color: inwardColor,
+          bags: bagsCount,
+          kg: calculatedTotalKg,
+          rate: weightVal,
+          total_amount: calculatedTotalKg * weightVal,
+          notes: inwardNotes
+        });
+        
+        // Update stock in Supabase
+        if (stockIdx > -1) {
+          await updateStock(updatedStock[stockIdx].id, {
+            kg: updatedStock[stockIdx].kg,
+            bags: updatedStock[stockIdx].bags
+          });
+        } else {
+          await createStock(session.user.id, {
+            stock_name: inwardColor,
+            color: inwardColor,
+            kg: calculatedTotalKg,
+            bags: bagsCount
+          });
+        }
+      } catch (err) {
+        console.error('Failed to save inward entry to Supabase:', err);
+      }
+    }
+
     setBottomSheet(null);
     showToast('Saved successfully');
     // reset form fields
@@ -1709,7 +1748,7 @@ export default function App() {
   // Get all unique saved party names dynamically from history
   const uniqueParties = Array.from(new Set(db.outward.map(item => item.partyName).filter(Boolean)));
 
-  const saveOutwardEntry = (e) => {
+  const saveOutwardEntry = async (e) => {
     e.preventDefault();
     const finalParty = (showNewPartyInput || uniqueParties.length === 0) ? outwardNewParty.trim() : outwardParty.trim();
     const bagsCount = parseInt(outwardBags);
@@ -1790,6 +1829,42 @@ export default function App() {
       stock: updatedStock
     }));
 
+    // Save to Supabase
+    if (isSupabaseConfigured() && session) {
+      try {
+        // Create party if new
+        if (showNewPartyInput) {
+          await createParty(session.user.id, { name: finalParty });
+        }
+        
+        // Create outward transaction
+        await createOutwardTransaction(session.user.id, {
+          date: outwardDate,
+          party_name: finalParty,
+          color: outwardColor,
+          bags: bagsCount,
+          kg: calculatedTotalKg,
+          rate: weightVal,
+          total_amount: calculatedTotalKg * weightVal,
+          notes: ''
+        });
+        
+        // Update stock in Supabase (deduct from affected items)
+        for (let i = 0; i < matchingStockItems.length; i++) {
+          const stockItem = matchingStockItems[i];
+          const stockIdx = updatedStock.findIndex(item => item.id === stockItem.id);
+          if (stockIdx > -1) {
+            await updateStock(updatedStock[stockIdx].id, {
+              kg: updatedStock[stockIdx].kg,
+              bags: updatedStock[stockIdx].bags
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to save outward entry to Supabase:', err);
+      }
+    }
+
     setBottomSheet(null);
     showToast(`Dispatched ${bagsCount} bags (${calculatedTotalKg.toFixed(2)} KG) of ${outwardColor} to ${finalParty}`);
     setOutwardParty('');
@@ -1813,7 +1888,7 @@ export default function App() {
   const [empJoining, setEmpJoining] = useState(new Date().toISOString().split('T')[0]);
   const [empAddress, setEmpAddress] = useState('');
 
-  const handleAddEmployee = (e) => {
+  const handleAddEmployee = async (e) => {
     e.preventDefault();
     if (!empName.trim() || !empPhone.trim() || !empRate.trim()) {
       showToast('Please fill all required fields', 'error');
@@ -1847,6 +1922,30 @@ export default function App() {
       employees: [...prev.employees, newEmp]
     }));
 
+    // Save to Supabase
+    if (isSupabaseConfigured() && session) {
+      try {
+        await createEmployee(session.user.id, {
+          name: empName,
+          father_name: empFather,
+          mother_name: empMother,
+          phone: empPhone,
+          blood_group: empBlood,
+          dob: empDob || null,
+          aadhaar: maskedAadhaar,
+          pay_type: empPayType,
+          shift: empShift,
+          rate: parseFloat(empRate),
+          joining_date: empJoining || null,
+          address: empAddress,
+          status: 'present',
+          photo_url: photoData || ""
+        });
+      } catch (err) {
+        console.error('Failed to save employee to Supabase:', err);
+      }
+    }
+
     setBottomSheet(null);
     showToast('Saved successfully');
     // reset variables
@@ -1864,7 +1963,7 @@ export default function App() {
   // Staff profile edit triggers
   const [isEditingEmployee, setIsEditingEmployee] = useState(false);
 
-  const handleUpdateEmployee = (e) => {
+  const handleUpdateEmployee = async (e) => {
     e.preventDefault();
     const updatedEmployees = db.employees.map(emp => {
       if (emp.id === activeEmployeeId) {
@@ -1888,6 +1987,29 @@ export default function App() {
     });
 
     setDb(prev => ({ ...prev, employees: updatedEmployees }));
+
+    // Save to Supabase
+    if (isSupabaseConfigured() && session) {
+      try {
+        await updateEmployee(activeEmployeeId, {
+          name: empName,
+          father_name: empFather,
+          mother_name: empMother,
+          phone: empPhone,
+          blood_group: empBlood,
+          dob: empDob || null,
+          pay_type: empPayType,
+          shift: empShift,
+          rate: parseFloat(empRate),
+          joining_date: empJoining || null,
+          address: empAddress,
+          photo_url: photoData || db.employees.find(e => e.id === activeEmployeeId)?.photoUrl
+        });
+      } catch (err) {
+        console.error('Failed to update employee in Supabase:', err);
+      }
+    }
+
     setIsEditingEmployee(false);
     showToast('Saved successfully');
   };
@@ -1913,9 +2035,19 @@ export default function App() {
       visible: true,
       title: 'Remove Employee',
       message: 'Are you sure you want to delete this employee?',
-      action: () => {
+      action: async () => {
         const remainingEmps = db.employees.filter(emp => emp.id !== activeEmployeeId);
         setDb(prev => ({ ...prev, employees: remainingEmps }));
+        
+        // Delete from Supabase
+        if (isSupabaseConfigured() && session) {
+          try {
+            await deleteEmployee(activeEmployeeId);
+          } catch (err) {
+            console.error('Failed to delete employee from Supabase:', err);
+          }
+        }
+        
         navigateTo('staff');
         setConfirmModal(prev => ({ ...prev, visible: false }));
         showToast('Employee removed');
@@ -1955,7 +2087,7 @@ export default function App() {
     }));
   };
 
-  const saveAttendanceSheet = () => {
+  const saveAttendanceSheet = async () => {
     const key = `${attendanceDate}_${attendanceShift}`;
     const updatedAttendance = {
       ...db.attendance,
@@ -1964,8 +2096,8 @@ export default function App() {
 
     // Update employees status flags for today's view in dashboard
     const updatedEmployees = db.employees.map(emp => {
-      if (emp.shift === attendanceShift && localAttendanceMap[emp.id]) {
-        return { ...emp, status: localAttendanceMap[emp.id] };
+      if (emp.shift === attendanceShift) {
+        return { ...emp, status: localAttendanceMap[emp.id] || 'present' };
       }
       return emp;
     });
@@ -1989,6 +2121,34 @@ export default function App() {
       activity: [newActivity, ...prev.activity.slice(0, 5)]
     }));
 
+    // Save to Supabase
+    if (isSupabaseConfigured() && session) {
+      try {
+        // Save attendance records for each employee
+        for (const emp of db.employees) {
+          if (emp.shift === attendanceShift) {
+            const status = localAttendanceMap[emp.id] || 'present';
+            // Check if attendance record already exists
+            const existingAttendance = await getAttendance(session.user.id, attendanceDate);
+            const existingRecord = existingAttendance.find(a => a.employee_id === emp.id && a.shift === attendanceShift);
+            
+            if (existingRecord) {
+              await updateAttendance(existingRecord.id, { status });
+            } else {
+              await createAttendance(session.user.id, {
+                employee_id: emp.id,
+                date: attendanceDate,
+                shift: attendanceShift,
+                status
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to save attendance to Supabase:', err);
+      }
+    }
+
     setBottomSheet(null);
     showToast('Saved successfully');
   };
@@ -2008,19 +2168,41 @@ export default function App() {
     setBottomSheet('edit_stock');
   };
 
-  const saveStockEdit = (isRemove) => {
+  const saveStockEdit = async (isRemove) => {
     let updatedStock = [...db.stock];
     const idx = updatedStock.findIndex(item => item.color === selectedStockColor);
 
     if (idx === -1) return;
 
     if (isRemove) {
+      const stockItem = updatedStock[idx];
       updatedStock.splice(idx, 1);
       showToast('Stock entry removed');
+      
+      // Delete from Supabase
+      if (isSupabaseConfigured() && session) {
+        try {
+          await deleteStock(stockItem.id);
+        } catch (err) {
+          console.error('Failed to delete stock from Supabase:', err);
+        }
+      }
     } else {
       updatedStock[idx].kg = parseFloat(stockEditKg) || 0;
       updatedStock[idx].bags = parseInt(stockEditBags) || 0;
       showToast('Saved successfully');
+      
+      // Update in Supabase
+      if (isSupabaseConfigured() && session) {
+        try {
+          await updateStock(updatedStock[idx].id, {
+            kg: parseFloat(stockEditKg) || 0,
+            bags: parseInt(stockEditBags) || 0
+          });
+        } catch (err) {
+          console.error('Failed to update stock in Supabase:', err);
+        }
+      }
     }
 
     setDb(prev => ({ ...prev, stock: updatedStock }));
@@ -2058,7 +2240,7 @@ export default function App() {
       visible: true,
       title: 'Start Weekly Payroll',
       message: 'Generate payroll for week ' + getWeekNumber().toString() + '?',
-      action: () => {
+      action: async () => {
         // Compile Payroll records into database
         const breakdown = db.employees.map(emp => {
           const rate = localPayrollRates[emp.id] || emp.rate;
@@ -2095,6 +2277,27 @@ export default function App() {
           ...prev,
           payrollRuns: [runRecord, ...prev.payrollRuns]
         }));
+
+        // Save to Supabase
+        if (isSupabaseConfigured() && session) {
+          try {
+            const today = new Date();
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay() + 1); // Monday
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6); // Sunday
+
+            await createPayrollRun(session.user.id, {
+              type: payrollType,
+              start_date: weekStart.toISOString().split('T')[0],
+              end_date: weekEnd.toISOString().split('T')[0],
+              total_amount: totalPayableVal,
+              details: breakdown
+            });
+          } catch (err) {
+            console.error('Failed to save payroll to Supabase:', err);
+          }
+        }
 
         setConfirmModal(prev => ({ ...prev, visible: false }));
         showToast('Weekly payroll generated');
